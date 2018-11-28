@@ -1,0 +1,10 @@
+
+settingVersions:
+  recommendedSettingsVersion: 'default'
+  recommendedSettingsLabels: ['default', 'simulation']
+
+setting:
+  default:
+    type: 'sim'
+  simulation:
+    type: 'sim'
