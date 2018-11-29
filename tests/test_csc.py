@@ -17,6 +17,7 @@ index_gen = salobj.index_generator()
 class Harness:
     def __init__(self, index):
         salobj.test_utils.set_random_lsst_dds_domain()
+        # import pdb; pdb.set_trace()
         self.csc = dimm_csc.DIMMCSC(index=index)
         self.remote = salobj.Remote(SALPY_DIMM, index)
 
@@ -68,10 +69,8 @@ class TestDIMMCSC(unittest.TestCase):
                     continue  # valid command in STANDBY state
                 with self.subTest(bad_command=bad_command):
                     cmd_attr = getattr(harness.remote, f"cmd_{bad_command}")
-                    id_ack = await cmd_attr.start(cmd_attr.DataType(), timeout=1.)
-                    self.assertEqual(id_ack.ack.ack, harness.remote.salinfo.lib.SAL__CMD_FAILED)
-                    self.assertNotEqual(id_ack.ack.error, 0)
-                    self.assertNotEqual(id_ack.ack.result, "")
+                    with self.assertRaises(salobj.AckError):
+                        id_ack = await cmd_attr.start(cmd_attr.DataType(), timeout=1.)
 
             # send start; new state is DISABLED
             cmd_attr = getattr(harness.remote, f"cmd_start")
@@ -93,10 +92,8 @@ class TestDIMMCSC(unittest.TestCase):
                     continue  # valid command in DISABLED state
                 with self.subTest(bad_command=bad_command):
                     cmd_attr = getattr(harness.remote, f"cmd_{bad_command}")
-                    id_ack = await cmd_attr.start(cmd_attr.DataType(), timeout=1.)
-                    self.assertEqual(id_ack.ack.ack, harness.remote.salinfo.lib.SAL__CMD_FAILED)
-                    self.assertNotEqual(id_ack.ack.error, 0)
-                    self.assertNotEqual(id_ack.ack.result, "")
+                    with self.assertRaises(salobj.AckError):
+                        id_ack = await cmd_attr.start(cmd_attr.DataType(), timeout=1.)
 
             # send enable; new state is ENABLED
             cmd_attr = getattr(harness.remote, f"cmd_enable")
@@ -113,10 +110,8 @@ class TestDIMMCSC(unittest.TestCase):
                     continue  # valid command in ENABLE state
                 with self.subTest(bad_command=bad_command):
                     cmd_attr = getattr(harness.remote, f"cmd_{bad_command}")
-                    id_ack = await cmd_attr.start(cmd_attr.DataType(), timeout=1.)
-                    self.assertEqual(id_ack.ack.ack, harness.remote.salinfo.lib.SAL__CMD_FAILED)
-                    self.assertNotEqual(id_ack.ack.error, 0)
-                    self.assertNotEqual(id_ack.ack.result, "")
+                    with self.assertRaises(salobj.AckError):
+                        id_ack = await cmd_attr.start(cmd_attr.DataType(), timeout=1.)
 
             # send disable; new state is DISABLED
             cmd_attr = getattr(harness.remote, f"cmd_disable")

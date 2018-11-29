@@ -8,3 +8,6 @@ setting:
     type: 'sim'
   simulation:
     type: 'sim'
+    avg_seeing: 0.5
+    std_seeing: 0.1
+    chance_failure: 0.0
