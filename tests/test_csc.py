@@ -1,5 +1,4 @@
 import unittest
-import time
 import asyncio
 import numpy as np
 
@@ -113,9 +112,23 @@ class TestDIMMCSC(unittest.TestCase):
                     with self.assertRaises(salobj.AckError):
                         id_ack = await cmd_attr.start(cmd_attr.DataType(), timeout=1.)
 
+            # check that received telemetry topic from dimm
+            try:
+                await harness.remote.tel_status.next(timeout=salobj.base_csc.HEARTBEAT_INTERVAL*5)
+            except asyncio.TimeoutError:
+                self.assertTrue(False, 'No status published by DIMM')
+
+            # check that received measurement from dimm
+            try:
+                await harness.remote.evt_dimmMeasurement.next(flush=False,
+                                                              timeout=10)
+            except asyncio.TimeoutError:
+                self.assertTrue(False, 'No measurement published by DIMM.')
+
             # send disable; new state is DISABLED
             cmd_attr = getattr(harness.remote, f"cmd_disable")
-            id_ack = await cmd_attr.start(cmd_attr.DataType(), timeout=1.)
+            # this CMD may take some time to complete
+            id_ack = await cmd_attr.start(cmd_attr.DataType(), timeout=30.)
             self.assertEqual(id_ack.ack.ack, harness.remote.salinfo.lib.SAL__CMD_COMPLETE)
             self.assertEqual(id_ack.ack.error, 0)
             self.assertEqual(harness.csc.summary_state, salobj.State.DISABLED)

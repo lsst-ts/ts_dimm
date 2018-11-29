@@ -70,7 +70,7 @@ class Model:
             self.unset_controller()
 
         self.controller = available_controllers[self.config['setting'][setting]['type']]()
-        self.controller.setup()
+        self.controller.setup(**self.config['setting'][setting]['configuration'])
 
     def unset_controller(self):
         """Unset controller. This will call unset method on controller and make controller = None.

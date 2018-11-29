@@ -6,8 +6,27 @@ settingVersions:
 setting:
   default:
     type: 'sim'
+    configuration:
+      avg_seeing: 0.5  # average seeing (arcsec)
+      std_seeing: 0.1  # standard deviation (arcsec)
+      chance_failure: 0.0  # chance that the dimm will fail (in 1/100)
+      time_in_target:  # in hours
+        min: 2
+        max: 6
+      exposure_time: # in seconds
+        min: 30
+        max: 300
+        std: 5  # random deviation from actual value
   simulation:
     type: 'sim'
-    avg_seeing: 0.5
-    std_seeing: 0.1
-    chance_failure: 0.0
+    configuration:
+      avg_seeing: 0.5  # average seeing (arcsec)
+      std_seeing: 0.1  # standard deviation (arcsec)
+      chance_failure: 0.0  # chance that the dimm will fail (in 1/100)
+      time_in_target:  # in hours
+        min: 2
+        max: 6
+      exposure_time: # in seconds
+        min: 1
+        max: 3
+        std: 0.1  # random deviation from actual value

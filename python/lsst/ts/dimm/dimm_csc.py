@@ -10,6 +10,9 @@ from .model import Model
 
 __all__ = ['DIMMCSC']
 
+SEEING_LOOP_DONE = 101
+TELEMETRY_LOOP_DONE = 102
+
 
 class DIMMCSC(base_csc.BaseCsc):
     """
@@ -42,11 +45,21 @@ class DIMMCSC(base_csc.BaseCsc):
 
         self.evt_settingVersions.put(settingVersions_topic)
 
+        self.loop_die_timeout = 5  # how long to wait for the loops to die?
+
         self.telemetry_loop_running = False
+        self.telemetry_loop_task = None
+
+        self.seeing_loop_running = False
+        self.seeing_loop_task = None
+
+        self.health_monitor_loop_task = asyncio.ensure_future(self.health_monitor())
 
     def end_start(self, id_data):
         """End do_start; called after state changes
         but before command acknowledged.
+
+        This method call setup on the model, passing the selected setting.
 
         Parameters
         ----------
@@ -59,16 +72,24 @@ class DIMMCSC(base_csc.BaseCsc):
         """End do_enable; called after state changes
         but before command acknowledged.
 
+        This method will call `start` on the model controller and start the telemetry
+        and seeing monitoring loops.
+
         Parameters
         ----------
         id_data : `CommandIdData`
             Command ID and data
         """
 
-        asyncio.ensure_future(self.telemetry_loop())
+        self.model.controller.start()
+        self.telemetry_loop_task = asyncio.ensure_future(self.telemetry_loop())
+        self.seeing_loop_task = asyncio.ensure_future(self.seeing_loop())
 
     def begin_disable(self, id_data):
         """Begin do_disable; called before state changes.
+
+        This method will try to gracefully stop the telemetry and seeing loops by setting
+        the running flag to False, then stops the model controller.
 
         Parameters
         ----------
@@ -76,13 +97,42 @@ class DIMMCSC(base_csc.BaseCsc):
             Command ID and data
         """
         self.telemetry_loop_running = False
+        self.seeing_loop_running = False
+
+        self.model.controller.stop()
+
+    async def do_disable(self, id_data):
+        """Transition to from `State.ENABLED` to `State.DISABLED`.
+
+        After switching from enable to disable, wait for telemetry and seeing loop to
+        finish. If they take longer then a timeout to finish, cancel the future.
+
+        Parameters
+        ----------
+        id_data : `CommandIdData`
+            Command ID and data
+        """
+        self._do_change_state(id_data, "disable", [base_csc.State.ENABLED], base_csc.State.DISABLED)
+
+        await self.wait_loop(self.telemetry_loop_task)
+
+        await self.wait_loop(self.seeing_loop_task)
+
+    def begin_standby(self, id_data):
+        """Begin do_standby; called before the state changes.
+
+        Before transitioning to standby, unset the model controller.
+
+        Parameters
+        ----------
+        id_data : `CommandIdData`
+            Command ID and data
+        """
+        self.model.unset_controller()
 
     async def telemetry_loop(self):
-        """
-
-        Returns
-        -------
-
+        """Telemetry loop coroutine. This method should only be running if the component is enabled. It will get
+        the state of the model controller and output it to the telemetry stream at the heartbeat interval.
         """
         if self.telemetry_loop_running:
             raise IOError('Telemetry loop still running...')
@@ -101,3 +151,74 @@ class DIMMCSC(base_csc.BaseCsc):
             self.tel_status.put(state_topic)
 
             await asyncio.sleep(base_csc.HEARTBEAT_INTERVAL)
+
+    async def seeing_loop(self):
+        """Seeing loop coroutine. This method is responsible for getting new measurements from the DIMM
+        controller and and output them as events. The choice of SAL Events instead of SAL Telemetry comes
+        from the fact that the measurements are not periodic. They may take different amount of time depending
+        of the star being used to measure seeing, be interrupted during the selection of a new target and so
+        on. The model controller can just raise an exception in case of an error and the health loop will
+        catch it and take appropriate actions.
+        """
+        if self.seeing_loop_running:
+            raise IOError('Seeing loop still running...')
+        self.seeing_loop_running = True
+
+        while self.seeing_loop_running:
+            data = await self.model.controller.get_measurement()
+            data_topic = self.evt_dimmMeasurement.DataType()
+            for info in data:
+                setattr(data_topic, info, data[info])
+            self.evt_dimmMeasurement.put(data_topic)
+
+    async def health_monitor(self):
+        """This loop monitors the health of the DIMM controller and the seeing and telemetry loops. If an issue happen
+        it will output the `errorCode` event and put the component in FAULT state.
+        """
+        while True:
+            if self.summary_state == base_csc.State.ENABLED:
+                if self.seeing_loop_task.done():
+                    error_topic = self.evt_errorCode.DataType()
+                    error_topic.errorCode = SEEING_LOOP_DONE
+                    error_topic.errorReport = 'Seeing loop died while in enable state.'
+                    error_topic.traceback = str(self.seeing_loop_task.exception().with_traceback())
+                    self.evt_errorCode.put(error_topic)
+
+                    self.summary_state = base_csc.State.FAULT
+
+                if self.telemetry_loop_task.done():
+                    error_topic = self.evt_errorCode.DataType()
+                    error_topic.errorCode = TELEMETRY_LOOP_DONE
+                    error_topic.errorReport = 'Telemetry loop died while in enable state.'
+                    error_topic.traceback = str(self.telemetry_loop_task.exception().with_traceback())
+                    self.evt_errorCode.put(error_topic)
+
+                    self.summary_state = base_csc.State.FAULT
+
+            await asyncio.sleep(base_csc.HEARTBEAT_INTERVAL)
+
+    async def wait_loop(self, loop):
+        """A utility method to wait for a task to die or cancel it and handle the aftermath.
+
+        Parameters
+        ----------
+        loop : _asyncio.Future
+
+        """
+        # wait for telemetry loop to die or kill it if timeout
+        timeout = True
+        for i in range(self.loop_die_timeout):
+            if loop.done():
+                timeout = False
+                break
+            await asyncio.sleep(base_csc.HEARTBEAT_INTERVAL)
+        if timeout:
+            loop.cancel()
+        try:
+            await loop
+        except asyncio.CancelledError:
+            self.log.info('Loop cancelled...')
+        except Exception as e:
+            # Something else may have happened. I still want to disable as this will stop the loop on the
+            # target production
+            self.log.exception(e)
