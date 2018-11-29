@@ -3,32 +3,20 @@ import time
 import datetime
 import asyncio
 
+from .base_dimm import BaseDIMM, DIMMStatus
+
 import numpy as np
 
 __all__ = ['SimDIMM']
 
 
-SimStatus = {'NOTSET': 0,
-             'INITIALIZED': 1 << 1,
-             'RUNNING': 1 << 2,
-             'ERROR': 1 << 3,
-             }
-
-
-class SimDIMM:
+class SimDIMM(BaseDIMM):
     """This controller provides a simmulated DIMM interface that can be used for testing and
 mocking a real DIMM.
     """
 
     def __init__(self):
-
-        self.status = {'status': SimStatus['NOTSET'],
-                       'ra': 0.,
-                       'dec': 0.,
-                       'altitude': 0.,
-                       'azimuth': 0.,
-                       'hrnum': 0,
-                       }
+        super().__init__()
 
         self.avg_seeing = 0.5  # average seeing (arcsec)
         self.std_seeing = 0.1  # standard deviation (arcsec)
@@ -64,7 +52,7 @@ mocking a real DIMM.
         -------
 
         """
-        self.status['status'] = SimStatus['INITIALIZED']
+        self.status['status'] = DIMMStatus['INITIALIZED']
         if avg_seeing < 0.:
             raise IOError('Avg seeing must be larger than zero. Got %f' % avg_seeing)
         self.avg_seeing = avg_seeing
@@ -87,29 +75,17 @@ mocking a real DIMM.
 
     def unset(self):
         """Unset SimDim."""
-        self.status['status'] = SimStatus['NOTSET']
+        self.status['status'] = DIMMStatus['NOTSET']
 
     def start(self):
         """Start DIMM."""
-        self.status['status'] = SimStatus['RUNNING']
+        self.status['status'] = DIMMStatus['RUNNING']
         self.measurement_loop = asyncio.ensure_future(self.generate_measurements())
 
     def stop(self):
         """Stop DIMM."""
         self.measurement_loop.cancel()
-        self.status['status'] = SimStatus['INITIALIZED']
-
-    def get_status(self):
-        """Returns status of the DIMM.
-
-        Returns
-        -------
-        status : dict
-            Dictionary with DIMM status.
-
-        """
-
-        return self.status
+        self.status['status'] = DIMMStatus['INITIALIZED']
 
     def new_measurement(self):
         """Generate a new measurement for the simulated DIMM.
