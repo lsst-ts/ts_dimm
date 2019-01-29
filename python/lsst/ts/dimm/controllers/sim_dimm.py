@@ -28,6 +28,7 @@ mocking a real DIMM.
         self.measurement_start = None
         self.measurement_queue = []
         self.last_measurement = None
+        self.last_exposure_time = 0.
 
         self.current_hrnum = 0
         self.current_exptime = 0
@@ -73,17 +74,13 @@ mocking a real DIMM.
             raise IOError('exposure_time must have min, max and std. Got %s' % exposure_time.keys())
         self.exposure_time = exposure_time
 
-    def unset(self):
-        """Unset SimDim."""
-        self.status['status'] = DIMMStatus['NOTSET']
-
     def start(self):
-        """Start DIMM."""
+        """Start DIMM. Overwrites method from base class."""
         self.status['status'] = DIMMStatus['RUNNING']
         self.measurement_loop = asyncio.ensure_future(self.generate_measurements())
 
     def stop(self):
-        """Stop DIMM."""
+        """Stop DIMM. Overwrites method from base class."""
         self.measurement_loop.cancel()
         self.status['status'] = DIMMStatus['INITIALIZED']
 
@@ -104,23 +101,26 @@ mocking a real DIMM.
         elif modified_exptime > self.exposure_time['max']:
             modified_exptime = self.exposure_time['max']
 
+        self.last_exposure_time = modified_exptime
+
         measurement = dict()
         measurement['hrNum'] = self.current_hrnum
         measurement['timestamp'] = self.measurement_start.timestamp()
-        measurement['utDate'] = str(self.measurement_start.date())
-        measurement['utTime'] = str(self.measurement_start.time())
-        measurement['exposureTime'] = modified_exptime
-        measurement['airmass'] = 1.
-        measurement['scanLines'] = 0
-        measurement['seeingCorr'] = np.random.normal(self.avg_seeing, self.std_seeing)
-        measurement['seeingCorr2'] = 0
-        measurement['seeingCorr6'] = 0
-        measurement['flux'] = np.random.randint(10000, 20000)
-        measurement['scintLeft'] = 0
-        measurement['scintRight'] = 0
-        measurement['strehlLeft'] = 0
-        measurement['strehlRight'] = 0
-        measurement['delta'] = 0
+        measurement['secz'] = 1.
+        measurement['fwhmx'] = np.random.normal(self.avg_seeing, self.std_seeing)
+        measurement['fwhmy'] = np.random.normal(self.avg_seeing, self.std_seeing)
+        measurement['fwhm'] = (measurement['fwhmx']+measurement['fwhmy'])/2.
+        measurement['r0'] = np.random.normal(15., 5.)
+        measurement['nimg'] = 1
+        measurement['dx'] = 0.
+        measurement['dy'] = 0.
+        measurement['fluxL'] = np.random.randint(10000, 20000)
+        measurement['scintL'] = 0
+        measurement['strehlL'] = 0
+        measurement['fluxR'] = np.random.randint(10000, 20000)
+        measurement['scintR'] = 0
+        measurement['strehlR'] = 0
+        measurement['flux'] = (measurement['fluxL'] + measurement['fluxR']) / 2.
 
         self.last_measurement = measurement
 
@@ -149,7 +149,7 @@ mocking a real DIMM.
                 self.new_hrnum()
             measurement = self.new_measurement()
             self.measurement_queue.append(measurement)
-            await asyncio.sleep(measurement['exposureTime'])
+            await asyncio.sleep(self.last_exposure_time)
 
     async def get_measurement(self):
         """Coroutine to wait and return new seeing measurements.
