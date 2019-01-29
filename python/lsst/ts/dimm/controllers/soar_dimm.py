@@ -19,7 +19,10 @@ class SOARDIMM(BaseDIMM):
     def __init__(self):
         super().__init__()
 
-        warnings.warn("This class is still under development and will not work as expected.")
+        warnings.warn("This class is still under development and will not work as expected. If instantiated, "
+                      "it will start a coroutine that is responsible for grabbing the DIMM data from a "
+                      "sql database but the loop won't do anything. The CSC will look like is running"
+                      "but it will not grab or publish any data.")
 
         self.uri = "mysql://user:password@host/database/"
         """The uri address to connect to the DIMM database."""
