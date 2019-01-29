@@ -11,7 +11,17 @@ from .model import Model
 __all__ = ['DIMMCSC']
 
 SEEING_LOOP_DONE = 101
+""" Seeing loop done (`int`).
+
+This error code is published in `SALPY_DIMM.DIMM_logevent_errorCodeC` if the coroutine that
+gets new seeing data from the controller finishes while the CSC is in enable state.
+"""
 TELEMETRY_LOOP_DONE = 102
+""" Telemetry loop done (`int`).
+
+This error code is published in `SALPY_DIMM.DIMM_logevent_errorCodeC` if the coroutine that
+monitors the health and status of the DIMM finishes while the CSC is in enable state.
+"""
 
 
 class DIMMCSC(base_csc.BaseCsc):
@@ -33,9 +43,6 @@ class DIMMCSC(base_csc.BaseCsc):
         self.model = Model()  # instantiate the model so I can have the settings once the component is up
 
         super().__init__(SALPY_DIMM, index)
-
-        # set/publish summaryState
-        self.summary_state = base_csc.State.STANDBY
 
         # publish settingVersions
         settingVersions_topic = self.evt_settingVersions.DataType()

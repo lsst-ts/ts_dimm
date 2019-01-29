@@ -73,7 +73,7 @@ class TestDIMMCSC(unittest.TestCase):
 
             # send start; new state is DISABLED
             cmd_attr = getattr(harness.remote, f"cmd_start")
-            state_coro = harness.remote.evt_summaryState.next(timeout=1.)
+            state_coro = harness.remote.evt_summaryState.next(flush=True, timeout=1.)
             start_topic = cmd_attr.DataType()
             start_topic.settingsToApply = 'simulation'  # user simulation setting.
             id_ack = await cmd_attr.start(start_topic, timeout=120)  # this one can take longer to execute
@@ -82,9 +82,6 @@ class TestDIMMCSC(unittest.TestCase):
             self.assertEqual(id_ack.ack.error, 0)
             self.assertEqual(harness.csc.summary_state, salobj.State.DISABLED)
             self.assertEqual(state.summaryState, salobj.State.DISABLED)
-
-            # TODO: There are two events issued when starting the scheduler; appliedSettingsMatchStart and
-            # settingsApplied. Check that they are received.
 
             for bad_command in commands:
                 if bad_command in ("enable", "standby"):
@@ -96,7 +93,7 @@ class TestDIMMCSC(unittest.TestCase):
 
             # send enable; new state is ENABLED
             cmd_attr = getattr(harness.remote, f"cmd_enable")
-            state_coro = harness.remote.evt_summaryState.next(timeout=1.)
+            state_coro = harness.remote.evt_summaryState.next(flush=True, timeout=1.)
             id_ack = await cmd_attr.start(cmd_attr.DataType(), timeout=1.)
             state = await state_coro
             self.assertEqual(id_ack.ack.ack, harness.remote.salinfo.lib.SAL__CMD_COMPLETE)
@@ -114,7 +111,7 @@ class TestDIMMCSC(unittest.TestCase):
 
             # check that received telemetry topic from dimm
             try:
-                await harness.remote.tel_status.next(timeout=salobj.base_csc.HEARTBEAT_INTERVAL*5)
+                await harness.remote.tel_status.next(flush=True, timeout=salobj.base_csc.HEARTBEAT_INTERVAL*5)
             except asyncio.TimeoutError:
                 self.assertTrue(False, 'No status published by DIMM')
 

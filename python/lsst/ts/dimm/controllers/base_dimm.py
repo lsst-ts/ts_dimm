@@ -1,4 +1,6 @@
 
+import abc
+
 __all__ = ['BaseDIMM', 'DIMMStatus']
 
 DIMMStatus = {'NOTSET': 0,
@@ -8,12 +10,12 @@ DIMMStatus = {'NOTSET': 0,
               }
 
 
-class BaseDIMM:
+class BaseDIMM(abc.ABC):
     """Base class for DIMM controllers.
 
-This class defines the minimum set of methods required to operate a DIMM in the context of the
-LSST CSC environment. When developing a controller for a CSC, one should subclass this method and
-overwrite the methods as required to setup and operate the DIMM.
+    This class defines the minimum set of methods required to operate a DIMM in the context of the
+    LSST CSC environment. When developing a controller for a CSC, one should subclass this method and
+    overwrite the methods as required to setup and operate the DIMM.
     """
     def __init__(self):
         self.status = {'status': DIMMStatus['NOTSET'],
@@ -59,3 +61,14 @@ overwrite the methods as required to setup and operate the DIMM.
 
         """
         return self.status
+
+    @abc.abstractmethod
+    async def get_measurement(self):
+        """Coroutine to wait and return new seeing measurements.
+
+        Returns
+        -------
+        measurement : dict
+            A dictionary with the same values of the dimmMeasurement topic SAL Event.
+        """
+        raise NotImplementedError()

@@ -7,7 +7,8 @@ from lsst.ts.dimm import controllers
 
 __all__ = ['Model']
 
-available_controllers = {'sim': controllers.SimDIMM}
+available_controllers = {'sim': controllers.SimDIMM,
+                         'soar': controllers.SOARDIMM}
 
 
 class Model:
