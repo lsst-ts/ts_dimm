@@ -11,8 +11,8 @@ __all__ = ['SimDIMM']
 
 
 class SimDIMM(BaseDIMM):
-    """This controller provides a simmulated DIMM interface that can be used for testing and
-mocking a real DIMM.
+    """This controller provides a simmulated DIMM interface that can be used
+    for testing and mocking a real DIMM.
     """
 
     def __init__(self):
@@ -47,7 +47,8 @@ mocking a real DIMM.
         time_in_target : dict(min, max)
             Dictionary with minimum and maximum time in target (in hours).
         exposure_time : dict(min, max, std)
-            Dictionary with minimum, maximum and standard deviation for exposure time (in seconds).
+            Dictionary with minimum, maximum and standard deviation for
+            exposure time (in seconds).
 
         Returns
         -------
@@ -90,7 +91,8 @@ mocking a real DIMM.
         Returns
         -------
         measurement : dict
-            A dictionary with the same values of the dimmMeasurement topic SAL Event.
+            A dictionary with the same values of the dimmMeasurement topic SAL
+            Event.
         """
         self.measurement_start = datetime.datetime.now()
 
@@ -127,12 +129,13 @@ mocking a real DIMM.
         return measurement
 
     def new_hrnum(self):
-        """Generate a new target for the DIMM. This is basically a new id (hrnum) and exposure time.
+        """Generate a new target for the DIMM. This is basically a new id
+        (hrnum) and exposure time.
         """
         self.current_hrnum = np.random.randint(0, 800)
-        self.current_exptime = (np.random.random()*(self.exposure_time['max'] -
-                                                    self.exposure_time['min']) +
-                                self.exposure_time['min'])
+        delta_time = self.exposure_time['max'] - self.exposure_time['min']
+        rand = np.random.random()
+        self.current_exptime = (rand*delta_time) + self.exposure_time['min']
 
     async def generate_measurements(self):
         """Coroutine to generate measurements.
@@ -157,7 +160,8 @@ mocking a real DIMM.
         Returns
         -------
         measurement : dict
-            A dictionary with the same values of the dimmMeasurement topic SAL Event.
+            A dictionary with the same values of the dimmMeasurement topic
+            SAL Event.
         """
 
         while True:
