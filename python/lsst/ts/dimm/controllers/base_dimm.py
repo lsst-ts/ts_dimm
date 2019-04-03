@@ -17,7 +17,7 @@ class BaseDIMM(abc.ABC):
     LSST CSC environment. When developing a controller for a CSC, one should subclass this method and
     overwrite the methods as required to setup and operate the DIMM.
     """
-    def __init__(self):
+    def __init__(self, log):
         self.status = {'status': DIMMStatus['NOTSET'],
                        'ra': 0.,
                        'dec': 0.,
@@ -25,6 +25,7 @@ class BaseDIMM(abc.ABC):
                        'azimuth': 0.,
                        'hrnum': 0,
                        }
+        self.log = log
 
     def setup(self, **argv):
         """Base DIMM setup method.

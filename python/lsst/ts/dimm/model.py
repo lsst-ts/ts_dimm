@@ -16,9 +16,9 @@ class Model:
     """
 
     """
-    def __init__(self):
+    def __init__(self, log):
 
-        self.log = logging.getLogger(__name__)
+        self.log = log
 
         self.config_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'config/config.yaml')
 
@@ -71,7 +71,7 @@ class Model:
             self.log.debug('Controller already set. Unsetting.')
             self.unset_controller()
 
-        self.controller = available_controllers[self.config['setting'][setting]['type']]()
+        self.controller = available_controllers[self.config['setting'][setting]['type']](self.log)
         self.controller.setup(**self.config['setting'][setting]['configuration'])
 
     def unset_controller(self):

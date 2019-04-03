@@ -1,7 +1,7 @@
 
 settingVersions:
   recommendedSettingsVersion: 'default'
-  recommendedSettingsLabels: ['default', 'simulation']
+  recommendedSettingsLabels: ['default', 'simulation', 'soar', 'lsst']
 
 setting:
   default:
@@ -35,3 +35,11 @@ setting:
     configuration:
       uri: 'mysql://becs:becs_sql@139.229.13.222/pachon'
       check_interval: 180.
+  lsst:
+    type: 'astelco'
+    configuration:
+      host: 127.0.0.1
+      port: 16500
+      auto_auth: True
+      user: admin
+      password: admin

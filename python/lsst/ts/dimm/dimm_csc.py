@@ -1,4 +1,3 @@
-
 import asyncio
 import logging
 
@@ -38,11 +37,12 @@ class DIMMCSC(base_csc.BaseCsc):
         index : int
             Index for the DIMM. This enables the control of multiple DIMMs.
         """
-        self.log = logging.getLogger("DIMM-CSC[%i]" % index)
-
-        self.model = Model()  # instantiate the model so I can have the settings once the component is up
-
         super().__init__(SALPY_DIMM, index)
+
+        ch = logging.StreamHandler()
+        self.log.addHandler(ch)
+
+        self.model = Model(self.log)  # instantiate the model so I can have the settings once the component is up
 
         # publish settingVersions
         settingVersions_topic = self.evt_settingVersions.DataType()
@@ -172,11 +172,11 @@ class DIMMCSC(base_csc.BaseCsc):
         self.seeing_loop_running = True
 
         while self.seeing_loop_running:
-            data = await self.model.controller.get_measurement()
-            data_topic = self.evt_dimmMeasurement.DataType()
-            for info in data:
-                setattr(data_topic, info, data[info])
-            self.evt_dimmMeasurement.put(data_topic)
+            try:
+                data = await self.model.controller.get_measurement()
+                self.evt_dimmMeasurement.set_put(**data)
+            except Exception as e:
+                self.log.exception(e)
 
     async def health_monitor(self):
         """This loop monitors the health of the DIMM controller and the seeing and telemetry loops. If an issue happen
