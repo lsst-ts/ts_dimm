@@ -21,3 +21,4 @@
 
 from .sim_dimm import *
 from .soar_dimm import *
+from .astelco_dimm import *

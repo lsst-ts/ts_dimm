@@ -10,8 +10,9 @@ __all__ = ['SOARDIMM']
 
 
 class SOARDIMM(BaseDIMM):
-    """This controller provides an interface with the SOAR telescope DIMM. This will connect to their sql database
-    and publish the data to LSST middleware.
+    """This controller provides an interface with the SOAR telescope DIMM.
+    This will connect to their sql database and publish the data to LSST
+    middleware.
 
     This controller class is still under development.
     """
@@ -19,10 +20,10 @@ class SOARDIMM(BaseDIMM):
     def __init__(self):
         super().__init__()
 
-        warnings.warn("This class is still under development and will not work as expected. If instantiated, "
-                      "it will start a coroutine that is responsible for grabbing the DIMM data from a "
-                      "sql database but the loop won't do anything. The CSC will look like is running"
-                      "but it will not grab or publish any data.")
+        warnings.warn("This class is still under development and will not work as expected. If "
+                      "instantiated, it will start a coroutine that is responsible for grabbing "
+                      "the DIMM data from a sql database but the loop won't do anything. The CSC "
+                      "will look like is running but it will not grab or publish any data.")
 
         self.uri = "mysql://user:password@host/database/"
         """The uri address to connect to the DIMM database."""
@@ -48,7 +49,8 @@ class SOARDIMM(BaseDIMM):
         uri: str
             The uri address to connect to the dimm.
         check_interval: float
-            Time to wait before checking the database for new data (in seconds).
+            Time to wait before checking the database for new data
+            (in seconds).
         """
 
         self.uri = uri
@@ -81,7 +83,8 @@ class SOARDIMM(BaseDIMM):
         Returns
         -------
         measurement : dict
-            A dictionary with the same values of the dimmMeasurement topic SAL Event.
+            A dictionary with the same values of the dimmMeasurement topic
+            SAL Event.
         """
 
         while True:
