@@ -15,8 +15,8 @@ class SimDIMM(BaseDIMM):
     for testing and mocking a real DIMM.
     """
 
-    def __init__(self):
-        super().__init__()
+    def __init__(self, log):
+        super().__init__(log)
 
         self.avg_seeing = 0.5  # average seeing (arcsec)
         self.std_seeing = 0.1  # standard deviation (arcsec)

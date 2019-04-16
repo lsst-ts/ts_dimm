@@ -17,8 +17,8 @@ class SOARDIMM(BaseDIMM):
     This controller class is still under development.
     """
 
-    def __init__(self):
-        super().__init__()
+    def __init__(self, log):
+        super().__init__(log)
 
         warnings.warn("This class is still under development and will not work as expected. If "
                       "instantiated, it will start a coroutine that is responsible for grabbing "
