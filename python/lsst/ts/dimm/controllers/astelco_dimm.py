@@ -185,9 +185,9 @@ class AstelcoDIMM(BaseDIMM):
         # will close anyway if value stops being updated.
         # To force stop of the DIMM we set this value to be higher than
         # the close operation limit (-10.).
-        #cmd = AstelcoCommand("SET", f"SKY.TEMP=0.")
-        #self.cmd_list[cmd.id] = cmd
-        #asyncio.ensure_future(self.run_command(cmd.id))
+        # cmd = AstelcoCommand("SET", f"SKY.TEMP=0.")
+        # self.cmd_list[cmd.id] = cmd
+        # asyncio.ensure_future(self.run_command(cmd.id))
         self.status_loop_future.cancel()
 
         self.status['status'] = DIMMStatus['INITIALIZED']
@@ -419,6 +419,7 @@ class AstelcoDIMM(BaseDIMM):
                     try:
                         re_exp = re.search(exp, read_bytes.decode().strip())
                     except Exception as e:
+                        self.log.exception(e)
                         continue
 
                     if re_exp is not None:
@@ -484,7 +485,6 @@ class AstelcoDIMM(BaseDIMM):
                         self.log.debug(f"Deleting {cmdid}")
                         del self.cmd_list[next(iter(self.cmd_list))]
                 self.log.debug("Cleaning done")
-
 
     @property
     def connected(self):

@@ -42,7 +42,9 @@ class DIMMCSC(base_csc.BaseCsc):
         ch = logging.StreamHandler()
         self.log.addHandler(ch)
 
-        self.model = Model(self.log)  # instantiate the model so I can have the settings once the component is up
+        # Instantiate the model so I can have the settings once the
+        # component is up
+        self.model = Model(self.log)
 
         # publish settingVersions
         settingVersions_topic = self.evt_settingVersions.DataType()
