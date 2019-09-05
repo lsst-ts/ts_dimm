@@ -1,35 +1,46 @@
-import time
-import re
-import asyncio
-from collections import defaultdict
-import enum
-import numpy as np
-
-from .base_dimm import BaseDIMM, DIMMStatus
-
-import SALPY_Environment
-
-from lsst.ts.salobj import Remote, index_generator
-
+# This file is part of ts_environment.
+#
+# Developed for the LSST Telescope and Site Systems.
+# This product includes software developed by the LSST Project
+# (https://www.lsst.org).
+# See the COPYRIGHT file at the top-level directory of this distribution
+# for details of code ownership.
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 __all__ = ['AstelcoDIMM', 'AstelcoCommand']
 
+import time, re, asyncio, enum
+import numpy as np
+from collections import defaultdict
 
-index_gen = index_generator()
+from .base_dimm import BaseDIMM, DIMMStatus
+from lsst.ts import salobj
+from lsst.ts.environment import Environment
+
+index_gen = salobj.index_generator()
 
 _LOCAL_HOST = "127.0.0.1"
 _DEFAULT_PORT = 65432
 
-
 def return_string():
     return str
-
 
 _CmdType = defaultdict(return_string)
 
 _CmdType['1'] = int
 _CmdType['2'] = float
-
 
 class CMDStatus(enum.IntEnum):
     DONE = enum.auto()
@@ -37,11 +48,10 @@ class CMDStatus(enum.IntEnum):
     WAITING = enum.auto()
     TIMEOUT = enum.auto()
 
-
 class AstelcoCommand:
-    """Represent the command interaction with the astelco controller.
     """
-
+    Represent the command interaction with the astelco controller.
+    """
     def __init__(self, cmd, obj):
         self.id = next(index_gen)
         self.cmd = cmd
@@ -62,16 +72,17 @@ class AstelcoCommand:
 
     def encode(self):
         self.send_time = time.time()
+
         return f"{self.id} {self.cmd} {self.object}\r\n".encode()
 
-
 class AstelcoDIMM(BaseDIMM):
-    """This controller provides an interface to Astelco autonomous DIMMs.
+    """
+    This controller provides an interface to Astelco autonomous DIMMs.
+
     Astelco is providing the DIMM hardware and software controller for LSST
     and this controller interface is responsible for interfacing with their
     software.
     """
-
     def __init__(self, log):
         super().__init__(log)
 
@@ -105,19 +116,20 @@ class AstelcoDIMM(BaseDIMM):
         self.last_measurement = None
 
         # A remote to weather station data
-        self.ws_remote = Remote(SALPY_Environment, 1)
+        self.ws_csc = Environment(initial_state=salobj.State.STANDBY, config_dir=None)
+        self.ws_remote = salobj.Remote(domain=self.ws_csc.domain, name="Environment")
 
         self.dimm_seeing = AstelcoCommand('GET', 'EVENT')
         self.dimm_seeing_lowfreq = AstelcoCommand('GET', 'EVENT')
 
         self.rain_value = False
         self.snow_value = False
-        """Rain and snow values to be sent to the DIMM controller. This value
+        """
+        Rain and snow values to be sent to the DIMM controller. This value
         is constructed with information from both rain and snow sensors which
         are captured by two different callback functions. I'll Keep it as a
         global value and set it whenever it is needed.
         """
-
         self._expect = [r'(?P<CMDID>\d+) DATA INLINE (?P<OBJECT>\S+)=(?P<VALUE>.+)',
                         r'(?P<CMDID>\d+) DATA OK (?P<OBJECT>\S+)',
                         r'(?P<CMDID>\d+) COMMAND (?P<STATUS>\S+)',
@@ -131,8 +143,8 @@ class AstelcoDIMM(BaseDIMM):
         ----------
         host : IP of the controller.
         port : Port for the controller
-        auto_auth : Is auto authorization enable? If yes, skip auth stop when
-            connecting to the controller.
+        auto_auth : Is auto authorization enable?
+                    If yes, skip auth stop when connecting to the controller.
         user : User for the auth procedure.
         password : Password fot the auth procedure.
         """
@@ -143,8 +155,9 @@ class AstelcoDIMM(BaseDIMM):
         self.password = password
 
     def start(self):
-        """Start DIMM. Overwrites method from base class."""
-
+        """
+        Start DIMM. Overwrites method from base class.
+        """
         asyncio.ensure_future(self.connect())
 
         # weather_callback updates information about:
@@ -154,11 +167,11 @@ class AstelcoDIMM(BaseDIMM):
         self.ws_remote.tel_weather.callback = self.weather_callback
 
         # self explanatory callbacks...
-        self.ws_remote.tel_windSpeed.callback = self.wind_speed_callback
+        self.ws_remote.tel_windSpeed.callback     = self.wind_speed_callback
         self.ws_remote.tel_windDirection.callback = self.wind_direction_callback
-        self.ws_remote.tel_dewPoint.callback = self.dew_point_callback
+        self.ws_remote.tel_dewPoint.callback      = self.dew_point_callback
         self.ws_remote.tel_precipitation.callback = self.precipitation_callback
-        self.ws_remote.tel_snowDepth.callback = self.snow_depth_callback
+        self.ws_remote.tel_snowDepth.callback     = self.snow_depth_callback
 
         # FIXME: Need to add callbacks for SKY module.
         # To force start of the DIMM we set this value to be lower than
@@ -171,31 +184,32 @@ class AstelcoDIMM(BaseDIMM):
         self.status['status'] = DIMMStatus['RUNNING']
 
     def stop(self):
-        """Stop DIMM. Overwrites method from base class."""
-
-        self.ws_remote.tel_weather.callback = None
-        self.ws_remote.tel_windSpeed.callback = None
+        """
+        Stop DIMM. Overwrites method from base class.
+        """
+        self.ws_remote.tel_weather.callback       = None
+        self.ws_remote.tel_windSpeed.callback     = None
         self.ws_remote.tel_windDirection.callback = None
-        self.ws_remote.tel_dewPoint.callback = None
+        self.ws_remote.tel_dewPoint.callback      = None
         self.ws_remote.tel_precipitation.callback = None
-        self.ws_remote.tel_snowDepth.callback = None
+        self.ws_remote.tel_snowDepth.callback     = None
 
         # FIXME: For action operations...
         # If the controller is stopped, force close out of the DIMM. If
         # will close anyway if value stops being updated.
         # To force stop of the DIMM we set this value to be higher than
         # the close operation limit (-10.).
-        #cmd = AstelcoCommand("SET", f"SKY.TEMP=0.")
-        #self.cmd_list[cmd.id] = cmd
-        #asyncio.ensure_future(self.run_command(cmd.id))
+        # cmd = AstelcoCommand("SET", f"SKY.TEMP=0.")
+        # self.cmd_list[cmd.id] = cmd
+        # asyncio.ensure_future(self.run_command(cmd.id))
         self.status_loop_future.cancel()
 
         self.status['status'] = DIMMStatus['INITIALIZED']
         asyncio.ensure_future(self.disconnect())
 
     async def status_loop(self):
-        """Monitor DIMM status and update `self.status` dictionary
-        information.
+        """
+        Monitor DIMM status and update`self.status`dictionaryinformation.
         """
         while True:
             try:
@@ -233,10 +247,12 @@ class AstelcoDIMM(BaseDIMM):
             await asyncio.sleep(1.)
 
     async def connect(self):
-        """Connect to the DIMM controller's TCP/IP.
+        """
+        Connect to the DIMM controller's TCP/IP.
         """
         async with self.cmd_lock:
             self.log.debug(f"connecting to: {self.host}:{self.port}")
+
             if self.connected:
                 raise RuntimeError("Already connected.")
 
@@ -259,6 +275,7 @@ class AstelcoDIMM(BaseDIMM):
 
                 # Write authentication
                 self.writer.write(auth_str.encode())
+
                 await self.writer.drain()
 
             # Get reply from auth. This is published even in auto_auth mode
@@ -280,9 +297,9 @@ class AstelcoDIMM(BaseDIMM):
             self.reply_handler_loop = asyncio.ensure_future(self.reply_hander())
 
     async def disconnect(self):
-        """Disconnect from the spectrograph controller's TCP/IP port.
         """
-
+        Disconnect from the spectrograph controller's TCP/IP port.
+        """
         try:
             self.reply_handler_loop.cancel()
             await self.reply_handler_loop
@@ -300,6 +317,7 @@ class AstelcoDIMM(BaseDIMM):
         writer = self.writer
         self.reader = None
         self.writer = None
+
         if writer:
             try:
                 writer.write_eof()
@@ -313,10 +331,8 @@ class AstelcoDIMM(BaseDIMM):
         Returns
         -------
         measurement : dict
-            A dictionary with the same values of the dimmMeasurement topic SAL
-            Event.
+            A dictionary with the same values of the dimmMeasurement topic SAL Event.
         """
-
         try:
             # timestamp = AstelcoCommand("GET", "DIMM.TIMESTAMP")
             await self.dimm_seeing.cmd_complete_evt.wait()
@@ -328,16 +344,13 @@ class AstelcoDIMM(BaseDIMM):
             return None
 
     async def new_measurement(self):
-        """Generate a new measurement by querying DIMM controller
-        information.
+        """Generate a new measurement by querying DIMM controller information.
 
         Returns
         -------
         measurement : dict
-            A dictionary with the same values of the dimmMeasurement topic SAL
-            Event.
+            A dictionary with the same values of the dimmMeasurement topic SAL Event.
         """
-
         measurement = dict()
 
         measurement['hrNum'] = 0
@@ -357,17 +370,18 @@ class AstelcoDIMM(BaseDIMM):
 
         measurement['fwhm'] = self.dimm_seeing.data
         self.dimm_seeing.cmd_complete_evt.clear()
-        measurement['r0'] = -1
-        measurement['nimg'] = 1
-        measurement['dx'] = 0.
-        measurement['dy'] = 0.
-        measurement['fluxL'] = 0.
-        measurement['scintL'] = 0
+
+        measurement['r0'     ] = -1
+        measurement['nimg'   ] = 1
+        measurement['dx'     ] = 0.
+        measurement['dy'     ] = 0.
+        measurement['fluxL'  ] = 0.
+        measurement['scintL' ] = 0
         measurement['strehlL'] = 0
-        measurement['fluxR'] = 0
-        measurement['scintR'] = 0
+        measurement['fluxR'  ] = 0
+        measurement['scintR' ] = 0
         measurement['strehlR'] = 0
-        measurement['flux'] = 0.
+        measurement['flux'   ] = 0.
 
         return measurement
 
@@ -383,11 +397,9 @@ class AstelcoDIMM(BaseDIMM):
             Flag to specify if a connection is to be requested in case it is
             not connected.
         """
-
         self.log.debug(f"run_command: {self.cmd_list[cmdid].encode()}")
 
         async with self.cmd_lock:
-
             if not self.connected:
                 if want_connection and self.connect_task is not None and not self.connect_task.done():
                     await self.connect_task
@@ -400,14 +412,15 @@ class AstelcoDIMM(BaseDIMM):
 
             self.writer.write(self.cmd_list[cmdid].encode())
             self.cmd_list[cmdid].run = True
+
             await self.writer.drain()
 
     async def reply_hander(self):
-        """Handle reply from controller. It will parse the responses and
-        signals received from the controller and fill in the appropriate
-        information.
-        """
+        """Handle reply from controller.
 
+        It will parse the responses andsignals received from the controller
+        and fill in the appropriate information.
+        """
         while True:
             try:
                 self.log.debug("Wait for data")
@@ -415,14 +428,13 @@ class AstelcoDIMM(BaseDIMM):
                                                     timeout=None)
                 self.log.debug(read_bytes)
                 for exp in self._expect:
-
                     try:
                         re_exp = re.search(exp, read_bytes.decode().strip())
                     except Exception as e:
+                        self.log.exception(e)
                         continue
 
                     if re_exp is not None:
-
                         cmdid = int(re_exp.group('CMDID'))
 
                         # cmdid == 0 are for events
@@ -439,6 +451,7 @@ class AstelcoDIMM(BaseDIMM):
                                             self.cmd_list[cmdid].dtype(re_exp.group(
                                                 'VALUE').replace('"', '')))
                                     break
+
                                 elif 'COMMAND' in read_bytes.decode():
                                     self.cmd_list[cmdid].status = re_exp.group('STATUS')
                                     self.cmd_list[cmdid].allstatus.append(re_exp.group('STATUS'))
@@ -449,9 +462,11 @@ class AstelcoDIMM(BaseDIMM):
                                         self.cmd_list[cmdid].complete_time = time.time()
                                         self.cmd_list[cmdid].cmd_complete_evt.set()
                                     break
+
                                 elif 'EVENT ERROR' in read_bytes.decode():
                                     self.cmd_list[cmdid].events.append(re_exp.group('ENCM'))
                                     break
+
                             except Exception as e:
                                 self.log.error(f'Error parsing command: '
                                                f'{read_bytes.decode().rstrip()}')
@@ -460,47 +475,53 @@ class AstelcoDIMM(BaseDIMM):
                                 self.cmd_list[cmdid].complete_time = time.time()
                                 self.cmd_list[cmdid].cmd_complete_evt.set()
                                 self.log.exception(e)
+
                         elif re_exp.group("OBJECT") == "DIMM.SEEING":
                             self.dimm_seeing.data = np.float(re_exp.group("VALUE").split()[0])
                             self.dimm_seeing.complete_time = time.time()
                             self.dimm_seeing.cmd_complete_evt.set()
                             break
+
                         elif re_exp.group("OBJECT") == "DIMM.SEEING_LOWFREQ":
                             self.dimm_seeing_lowfreq.data = np.float(re_exp.group("VALUE").split()[0])
                             self.dimm_seeing_lowfreq.complete_time = time.time()
                             self.dimm_seeing_lowfreq.cmd_complete_evt.set()
                             break
+
             except asyncio.IncompleteReadError as e:
                 self.log.debug(f"Incomplete read error... Got {len(e.partial)}...")
+
                 if len(e.partial) > 0:
                     self.log.debug(e.partial)
+
             except Exception as e:
                 self.log.exception(e)
             finally:
                 self.log.debug("Cleaning up")
+
                 # Clean up old commands
                 if len(self.cmd_list) > self.cmd_max_size:
                     for i in range(len(self.cmd_list)-self.cmd_max_size):
                         self.log.debug(f"Deleting {cmdid}")
                         del self.cmd_list[next(iter(self.cmd_list))]
-                self.log.debug("Cleaning done")
 
+                self.log.debug("Cleaning done")
 
     @property
     def connected(self):
         if None in (self.reader, self.writer):
             return False
+
         return True
 
     async def weather_callback(self, data):
-        """Sends information about; ambient_temp (C), humidity (%) and
-        pressure (mBar) to the DIMM.
+        """Sends information about; ambient_temp (C),
+           humidity (%) and pressure (mBar) to the DIMM.
 
         The DIMM uses weather information to stablish if it should operate or
         not. If information is not continuously publish the DIMM will close
         due to safety issues.
         """
-
         cmd = AstelcoCommand("SET", f"WEATHER.TEMP_AMB={data.ambient_temp}")
         self.cmd_list[cmd.id] = cmd
         await self.run_command(cmd.id)
@@ -531,8 +552,8 @@ class AstelcoDIMM(BaseDIMM):
             await self.run_command(cmd.id)
 
     async def wind_direction_callback(self, data):
-        """Sends information about wind direction (degrees, clockwise from
-         due north) to the DIMM.
+        """Sends information about wind direction (degrees,
+           clockwise from due north) to the DIMM.
 
         Uses 2 minutes average information from weather station if average
         contains a valid values (>0), otherwise sends instantaneous if valid
@@ -558,30 +579,39 @@ class AstelcoDIMM(BaseDIMM):
         if data.avg1M > -99.:
             cmd = AstelcoCommand("SET", f"WEATHER.TEMP_DEW={data.avg1M}")
             self.cmd_list[cmd.id] = cmd
+
             await self.run_command(cmd.id)
 
     async def precipitation_callback(self, data):
         """Sends information about rain to the DIMM.
 
+        Keys
+        ----
         0 = no precipitation
         1 = rain/snow
         """
         if data.prSum1M > -99.:
             self.rain_value = data.prSum1M > 0.
             rain_value = int(self.rain_value or self.snow_value)
+
             cmd = AstelcoCommand("SET", f"WEATHER.RAIN={rain_value}")
             self.cmd_list[cmd.id] = cmd
+
             await self.run_command(cmd.id)
 
     async def snow_depth_callback(self, data):
         """Sends information about snow to the DIMM.
 
+        Keys
+        ----
         0 = no precipitation
         1 = rain/snow
         """
         if data.avg1M > -99.:
             self.snow_value = data.avg1M > 0.
             snow_value = int(self.snow_value or self.rain_value)
+
             cmd = AstelcoCommand("SET", f"WEATHER.RAIN={snow_value}")
             self.cmd_list[cmd.id] = cmd
+
             await self.run_command(cmd.id)

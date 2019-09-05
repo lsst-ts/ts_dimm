@@ -1,14 +1,33 @@
-
-import abc
+# This file is part of ts_environment.
+#
+# Developed for the LSST Telescope and Site Systems.
+# This product includes software developed by the LSST Project
+# (https://www.lsst.org).
+# See the COPYRIGHT file at the top-level directory of this distribution
+# for details of code ownership.
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 __all__ = ['BaseDIMM', 'DIMMStatus']
+
+import abc
 
 DIMMStatus = {'NOTSET': 0,
               'INITIALIZED': 1 << 1,
               'RUNNING': 1 << 2,
               'ERROR': 1 << 3,
               }
-
 
 class BaseDIMM(abc.ABC):
     """Base class for DIMM controllers.
@@ -36,20 +55,25 @@ class BaseDIMM(abc.ABC):
         ----------
         argv :
             Named parameters
-
         """
         pass
 
     def unset(self):
-        """Unset SimDim."""
+        """
+        Unset SimDim.
+        """
         self.status['status'] = DIMMStatus['NOTSET']
 
     def start(self):
-        """Start DIMM."""
+        """
+        Start DIMM.
+        """
         self.status['status'] = DIMMStatus['RUNNING']
 
     def stop(self):
-        """Stop DIMM."""
+        """
+        Stop DIMM.
+        """
         self.status['status'] = DIMMStatus['INITIALIZED']
 
     def get_status(self):

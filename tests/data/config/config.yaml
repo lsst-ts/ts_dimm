@@ -2,6 +2,7 @@
 settingVersions:
   recommendedSettingsVersion: 'default'
   recommendedSettingsLabels: ['default', 'simulation', 'soar', 'lsst']
+
 setting:
   default:
     type: 'sim'

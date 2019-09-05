@@ -1,28 +1,61 @@
-import unittest
-import asyncio
+# This file is part of ts_environment.
+#
+# Developed for the LSST Telescope and Site Systems.
+# This product includes software developed by the LSST Project
+# (https://www.lsst.org).
+# See the COPYRIGHT file at the top-level directory of this distribution
+# for details of code ownership.
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
+
+import unittest, asyncio, pathlib
 import numpy as np
 
 from lsst.ts import salobj
+from lsst.ts.dimm import DIMM
 
-from lsst.ts.dimm import dimm_csc
-
-import SALPY_DIMM
+# Aliases
+state = salobj.State
 
 np.random.seed(47)
-
 index_gen = salobj.index_generator()
 
+STD_TIMEOUT: int = 2  # standard command timeout (sec)
+LONG_TIMEOUT: int = 20  # time limit for starting a SAL component (sec)
+
+TEST_CONFIG_DIR = \
+    pathlib.Path(__file__).resolve().parents[1].joinpath("tests", "data", "config")
 
 class Harness:
-    def __init__(self, index):
+    def __init__(self, initial_state=state.STANDBY,
+                 config_dir=None, initial_simulation_mode=0):
         salobj.test_utils.set_random_lsst_dds_domain()
         # import pdb; pdb.set_trace()
-        self.csc = dimm_csc.DIMMCSC(index=index)
-        self.remote = salobj.Remote(SALPY_DIMM, index)
 
+        self.csc = DIMM(initial_state=initial_state, config_dir=config_dir,
+                        initial_simulation_mode=initial_simulation_mode)
+        self.remote = salobj.Remote(domain=self.csc.domain, name="DIMM")
 
-class TestDIMMCSC(unittest.TestCase):
+    async def __aenter__(self):
+        await asyncio.gather(self.csc.start_task,
+                             self.remote.start_task)
+        return self
 
+    async def __aexit__(self, *args):
+        await self.csc.close()
+
+class TestDIMM(unittest.TestCase):
     def test_standard_state_transitions(self):
         """Test standard CSC state transitions.
 
@@ -37,101 +70,46 @@ class TestDIMMCSC(unittest.TestCase):
         * standby: DISABLED to STANDBY
         * exitControl: STANDBY, FAULT to OFFLINE (quit)
         """
-
         async def doit():
+            async with Harness(config_dir=TEST_CONFIG_DIR) as harness:
+                csc = harness.csc
+                ss_remote_evt = harness.remote.evt_summaryState
 
-            commands = ("start", "enable", "disable", "exitControl", "standby")
-            index = next(index_gen)
-            self.assertGreater(index, 0)
+                self.assertEqual(csc.summary_state, state.STANDBY)
+                ss_remote = await ss_remote_evt.next(flush=False, timeout=LONG_TIMEOUT)
+                self.assertEqual(ss_remote.summaryState, state.STANDBY)
 
-            harness = Harness(index)
+                # send start; new state is DISABLED
+                await harness.remote.cmd_start.start(timeout=STD_TIMEOUT)
+                self.assertEqual(csc.summary_state, state.DISABLED)
+                ss_remote = await ss_remote_evt.next(flush=False, timeout=STD_TIMEOUT)
+                self.assertEqual(ss_remote.summaryState, state.DISABLED)
 
-            # Check initial state
-            current_state = await harness.remote.evt_summaryState.next(flush=False, timeout=1.)
+                # send enable; new state is ENABLED
+                await harness.remote.cmd_enable.start(timeout=STD_TIMEOUT)
+                self.assertEqual(csc.summary_state, state.ENABLED)
+                ss_remote = await ss_remote_evt.next(flush=False, timeout=STD_TIMEOUT)
+                self.assertEqual(ss_remote.summaryState, state.ENABLED)
 
-            self.assertEqual(harness.csc.summary_state, salobj.State.STANDBY)
-            self.assertEqual(current_state.summaryState, salobj.State.STANDBY)
+                # send disable; new state is DISABLED
+                await harness.remote.cmd_disable.start(timeout=LONG_TIMEOUT)
+                self.assertEqual(csc.summary_state, state.DISABLED)
+                ss_remote = await ss_remote_evt.next(flush=False, timeout=STD_TIMEOUT)
+                self.assertEqual(ss_remote.summaryState, state.DISABLED)
 
-            # Check that settingVersions was published and matches expected values
-            setting_versions = await harness.remote.evt_settingVersions.next(flush=False, timeout=1.)
-            self.assertEqual(setting_versions.recommendedSettingsVersion,
-                             harness.csc.model.config['settingVersions']['recommendedSettingsVersion'])
-            self.assertEqual(setting_versions.recommendedSettingsLabels,
-                             harness.csc.model.get_settings())
-            self.assertTrue(setting_versions.recommendedSettingsVersion in
-                            setting_versions.recommendedSettingsLabels.split(','))
-            self.assertTrue('simulation' in
-                            setting_versions.recommendedSettingsLabels.split(','))
+                # send standby; new state is STANDBY
+                await harness.remote.cmd_standby.start(timeout=STD_TIMEOUT)
+                self.assertEqual(csc.summary_state, state.STANDBY)
+                ss_remote = await ss_remote_evt.next(flush=False, timeout=STD_TIMEOUT)
+                self.assertEqual(ss_remote.summaryState, state.STANDBY)
 
-            for bad_command in commands:
-                if bad_command in ("start", "exitControl"):
-                    continue  # valid command in STANDBY state
-                with self.subTest(bad_command=bad_command):
-                    cmd_attr = getattr(harness.remote, f"cmd_{bad_command}")
-                    with self.assertRaises(salobj.AckError):
-                        id_ack = await cmd_attr.start(cmd_attr.DataType(), timeout=1.)
-
-            # send start; new state is DISABLED
-            cmd_attr = getattr(harness.remote, f"cmd_start")
-            state_coro = harness.remote.evt_summaryState.next(flush=True, timeout=1.)
-            start_topic = cmd_attr.DataType()
-            start_topic.settingsToApply = 'simulation'  # user simulation setting.
-            id_ack = await cmd_attr.start(start_topic, timeout=120)  # this one can take longer to execute
-            state = await state_coro
-            self.assertEqual(id_ack.ack.ack, harness.remote.salinfo.lib.SAL__CMD_COMPLETE)
-            self.assertEqual(id_ack.ack.error, 0)
-            self.assertEqual(harness.csc.summary_state, salobj.State.DISABLED)
-            self.assertEqual(state.summaryState, salobj.State.DISABLED)
-
-            for bad_command in commands:
-                if bad_command in ("enable", "standby"):
-                    continue  # valid command in DISABLED state
-                with self.subTest(bad_command=bad_command):
-                    cmd_attr = getattr(harness.remote, f"cmd_{bad_command}")
-                    with self.assertRaises(salobj.AckError):
-                        id_ack = await cmd_attr.start(cmd_attr.DataType(), timeout=1.)
-
-            # send enable; new state is ENABLED
-            cmd_attr = getattr(harness.remote, f"cmd_enable")
-            state_coro = harness.remote.evt_summaryState.next(flush=True, timeout=1.)
-            id_ack = await cmd_attr.start(cmd_attr.DataType(), timeout=1.)
-            state = await state_coro
-            self.assertEqual(id_ack.ack.ack, harness.remote.salinfo.lib.SAL__CMD_COMPLETE)
-            self.assertEqual(id_ack.ack.error, 0)
-            self.assertEqual(harness.csc.summary_state, salobj.State.ENABLED)
-            self.assertEqual(state.summaryState, salobj.State.ENABLED)
-
-            for bad_command in commands:
-                if bad_command == "disable":
-                    continue  # valid command in ENABLE state
-                with self.subTest(bad_command=bad_command):
-                    cmd_attr = getattr(harness.remote, f"cmd_{bad_command}")
-                    with self.assertRaises(salobj.AckError):
-                        id_ack = await cmd_attr.start(cmd_attr.DataType(), timeout=1.)
-
-            # check that received telemetry topic from dimm
-            try:
-                await harness.remote.tel_status.next(flush=True, timeout=salobj.base_csc.HEARTBEAT_INTERVAL*5)
-            except asyncio.TimeoutError:
-                self.assertTrue(False, 'No status published by DIMM')
-
-            # check that received measurement from dimm
-            try:
-                await harness.remote.evt_dimmMeasurement.next(flush=False,
-                                                              timeout=10)
-            except asyncio.TimeoutError:
-                self.assertTrue(False, 'No measurement published by DIMM.')
-
-            # send disable; new state is DISABLED
-            cmd_attr = getattr(harness.remote, f"cmd_disable")
-            # this CMD may take some time to complete
-            id_ack = await cmd_attr.start(cmd_attr.DataType(), timeout=30.)
-            self.assertEqual(id_ack.ack.ack, harness.remote.salinfo.lib.SAL__CMD_COMPLETE)
-            self.assertEqual(id_ack.ack.error, 0)
-            self.assertEqual(harness.csc.summary_state, salobj.State.DISABLED)
+                # send exitControl; new state is OFFLINE
+                await harness.remote.cmd_exitControl.start(timeout=STD_TIMEOUT)
+                self.assertEqual(csc.summary_state, state.OFFLINE)
+                ss_remote = await ss_remote_evt.next(flush=False, timeout=STD_TIMEOUT)
+                self.assertEqual(ss_remote.summaryState, state.OFFLINE)
 
         asyncio.get_event_loop().run_until_complete(doit())
-
 
 if __name__ == '__main__':
     unittest.main()
