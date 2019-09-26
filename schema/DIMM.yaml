@@ -1,0 +1,59 @@
+$schema: http://json-schema.org/draft-07/schema#
+$id: https://github.com/lsst-ts/ts_dimm/blob/master/schema/DIMM.yaml
+title: DIMM v1
+description: Schema for DIMM configuration files
+type: object
+properties:
+  controller:
+    type: string
+    enum: 
+      - sim
+      - astelco
+      - soar
+    default: sim
+allOf:
+- if:
+    properties:
+      controller:
+        const: sim
+  then:
+    properties:
+      avg_seeing:
+        type: number
+        default: 0.5
+        exclusiveMinimum: 0.0
+      std_seeing:
+        type: number
+        default: 0.1
+        exclusiveMinimum: 0.0
+      chance_failure:
+        type: number
+        default: 0.0
+        minimum: 0.0
+        maximum: 1.0
+      min_time_in_target:
+        type: number
+        default: 1.0
+        minimum: 1.0
+        maximum: 5.0
+      max_time_in_target:
+        type: number
+        default: 5.0
+        minimum: 5.0
+        maximum: 8.0
+      min_exposure_time:
+        type: number
+        default: 1
+        minimum: 0.05
+        maximum: 2.
+      max_exposure_time:
+        type: number
+        default: 3
+        minimum: 3.
+        maximum: 5.
+      std_exposure_time:
+        type: number
+        default: 0.1
+        minimum: 0.1
+        maximum: 0.5
+additionalProperties: true

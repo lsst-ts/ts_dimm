@@ -7,9 +7,7 @@ import numpy as np
 
 from .base_dimm import BaseDIMM, DIMMStatus
 
-import SALPY_Environment
-
-from lsst.ts.salobj import Remote, index_generator
+from lsst.ts.salobj import Remote, index_generator, Domain
 
 
 __all__ = ['AstelcoDIMM', 'AstelcoCommand']
@@ -105,7 +103,7 @@ class AstelcoDIMM(BaseDIMM):
         self.last_measurement = None
 
         # A remote to weather station data
-        self.ws_remote = Remote(SALPY_Environment, 1)
+        self.ws_remote = Remote(Domain(), "Environment", 1)
 
         self.dimm_seeing = AstelcoCommand('GET', 'EVENT')
         self.dimm_seeing_lowfreq = AstelcoCommand('GET', 'EVENT')
@@ -124,7 +122,7 @@ class AstelcoDIMM(BaseDIMM):
                         r'(?P<CMDID>\d+) EVENT INFO (?P<OBJECT>\S+):(?P<ENCM>(.*?)\s*): (?P<VALUE>.+)',
                         r'(?P<CMDID>\d+) EVENT ERROR (?P<OBJECT>\S+):(?P<ENCM>(.*?)\s*)']
 
-    def setup(self, host, port, auto_auth, user, password):
+    def setup(self, config):
         """Setup controller.
 
         Parameters
@@ -136,11 +134,11 @@ class AstelcoDIMM(BaseDIMM):
         user : User for the auth procedure.
         password : Password fot the auth procedure.
         """
-        self.host = host
-        self.port = int(port)
-        self.auto_auth = bool(auto_auth)
-        self.user = user
-        self.password = password
+        self.host = config.host
+        self.port = int(config.port)
+        self.auto_auth = bool(config.auto_auth)
+        self.user = config.user
+        self.password = config.password
 
     def start(self):
         """Start DIMM. Overwrites method from base class."""

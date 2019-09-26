@@ -41,7 +41,7 @@ class SOARDIMM(BaseDIMM):
         self.measurement_queue = []
         self.last_measurement = None
 
-    def setup(self, uri, check_interval):
+    def setup(self, config):
         """Setup SOARDIMM.
 
         Parameters
@@ -53,8 +53,8 @@ class SOARDIMM(BaseDIMM):
             (in seconds).
         """
 
-        self.uri = uri
-        self.check_interval = check_interval
+        self.uri = config.uri
+        self.check_interval = config.check_interval
         self.engine = sqlalchemy.create_engine(self.uri, pool_recycle=3600)
 
     def start(self):
