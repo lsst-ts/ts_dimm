@@ -1,7 +1,6 @@
 
 import os
 import yaml
-import logging
 
 from lsst.ts.dimm import controllers
 
