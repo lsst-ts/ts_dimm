@@ -27,15 +27,15 @@ class BaseDIMM(abc.ABC):
                        }
         self.log = log
 
-    def setup(self, **argv):
+    def setup(self, config):
         """Base DIMM setup method.
 
         When subclassing avoid using argv.
 
         Parameters
         ----------
-        argv :
-            Named parameters
+        config : `object`
+            Configuration object
 
         """
         pass

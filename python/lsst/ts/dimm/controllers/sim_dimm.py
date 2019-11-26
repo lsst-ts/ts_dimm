@@ -33,7 +33,7 @@ class SimDIMM(BaseDIMM):
         self.current_hrnum = 0
         self.current_exptime = 0
 
-    def setup(self, avg_seeing, std_seeing, chance_failure, time_in_target, exposure_time):
+    def setup(self, config):
         """Setup SimDim.
 
         Parameters
@@ -55,25 +55,32 @@ class SimDIMM(BaseDIMM):
 
         """
         self.status['status'] = DIMMStatus['INITIALIZED']
-        if avg_seeing < 0.:
-            raise IOError('Avg seeing must be larger than zero. Got %f' % avg_seeing)
-        self.avg_seeing = avg_seeing
+        if config.avg_seeing < 0.:
+            raise IOError('Avg seeing must be larger than zero. Got %f' % config.avg_seeing)
+        self.avg_seeing = config.avg_seeing
 
-        if std_seeing < 0.:
-            raise IOError('Std seeing must be larger than zero. Got %f' % std_seeing)
-        self.std_seeing = std_seeing
+        if config.std_seeing < 0.:
+            raise IOError('Std seeing must be larger than zero. Got %f' % config.std_seeing)
+        self.std_seeing = config.std_seeing
 
-        if not (0. <= chance_failure <= 100.):
+        if not (0. <= config.chance_failure <= 100.):
             raise IOError('Chance of failure must be between 0 and 100.')
-        self.chance_failure = chance_failure
+        self.chance_failure = config.chance_failure
 
-        if 'min' not in time_in_target or 'max' not in time_in_target:
-            raise IOError('time_in_target must have min and max. Got %s' % time_in_target.keys())
-        self.time_in_target = time_in_target
+        if hasattr(config, "min_time_in_target"):
+            self.time_in_target['min'] = config.min_time_in_target
 
-        if 'min' not in exposure_time or 'max' not in exposure_time or 'std' not in exposure_time:
-            raise IOError('exposure_time must have min, max and std. Got %s' % exposure_time.keys())
-        self.exposure_time = exposure_time
+        if hasattr(config, "max_time_in_target"):
+            self.time_in_target['max'] = config.max_time_in_target
+
+        if hasattr(config, "min_exposure_time"):
+            self.exposure_time['min'] = config.min_exposure_time
+
+        if hasattr(config, "max_exposure_time"):
+            self.exposure_time['max'] = config.max_exposure_time
+
+        if hasattr(config, "std_exposure_time"):
+            self.exposure_time['std'] = config.std_exposure_time
 
     def start(self):
         """Start DIMM. Overwrites method from base class."""
