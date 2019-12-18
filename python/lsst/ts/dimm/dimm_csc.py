@@ -21,7 +21,7 @@ This error code is published in `SALPY_DIMM.DIMM_logevent_errorCodeC` if the cor
 monitors the health and status of the DIMM finishes while the CSC is in enable state.
 """
 
-SIM_CONFIG = types.SimpleNamespace(type="sim",
+SIM_CONFIG = types.SimpleNamespace(controller="sim",
                                    avg_seeing=0.5,
                                    std_seeing=0.1,
                                    chance_failure=0.,
@@ -83,7 +83,7 @@ class DIMMCSC(salobj.ConfigurableCsc):
 
         if self.simulation_mode == 0:
             self.log.debug(f"Simulation mode is off. Configuring CSC for "
-                           f"{config.type} controller.")
+                           f"{config.controller} controller.")
             self.model.setup(config)
         elif self.simulation_mode == 1:
             self.log.debug(f"Simulation mode is on. Using default simulation controller. "

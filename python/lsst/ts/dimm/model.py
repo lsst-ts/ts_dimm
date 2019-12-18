@@ -30,7 +30,7 @@ class Model:
             self.log.debug('Controller already set. Unsetting.')
             self.unset_controller()
 
-        self.controller = available_controllers[config.type](self.log)
+        self.controller = available_controllers[config.controller](self.log)
         self.controller.setup(config)
 
     def unset_controller(self):
