@@ -25,7 +25,7 @@ setuptools.setup(
     packages=setuptools.find_namespace_packages(where="python"),
     package_data={"": ["*.rst", "*.yaml"]},
     data_files=[(os.path.join(data_files_path, "schema"),
-                ["schema/FiberSpectrograph.yaml"])],
+                ["schema/DIMM.yaml"])],
     scripts=["bin/dimm_csc.py"],
     tests_require=tests_require,
     extras_require={"dev": dev_requires},
