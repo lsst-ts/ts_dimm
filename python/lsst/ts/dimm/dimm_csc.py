@@ -86,8 +86,8 @@ class DIMMCSC(salobj.ConfigurableCsc):
                            f"{config.type} controller.")
             self.model.setup(config)
         elif self.simulation_mode == 1:
-            self.log.debug(f"{Simulation mode is on. Using default simulation controller. }"
-                           f"{Configuration will be ignored.}")
+            self.log.debug("Simulation mode is on. Using default simulation controller."
+                           "Configuration will be ignored.")
             self.model.setup(SIM_CONFIG)
 
     async def end_enable(self, id_data):
