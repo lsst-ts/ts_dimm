@@ -5,7 +5,7 @@ import argparse
 
 from lsst.ts.dimm import dimm_csc, version
 
-parser = argparse.ArgumentParser(f"Start the DIMM CSC")
+parser = argparse.ArgumentParser("Start the DIMM CSC")
 parser.add_argument("--version", action="version", version=version.__version__)
 parser.add_argument("-v", "--verbose", dest="verbose", action='count', default=0,
                     help="Set the verbosity for console logging.")

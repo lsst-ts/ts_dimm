@@ -76,7 +76,7 @@ class TestDIMMCSC(asynctest.TestCase):
                         id_ack = await cmd_attr.start(cmd_attr.DataType(), timeout=SHORT_TIMEOUT)
 
             # send start; new state is DISABLED
-            cmd_attr = getattr(harness.remote, f"cmd_start")
+            cmd_attr = getattr(harness.remote, "cmd_start")
             harness.remote.evt_summaryState.flush()
             id_ack = await cmd_attr.start(timeout=120)
             state = await harness.remote.evt_summaryState.next(flush=False, timeout=SHORT_TIMEOUT)
@@ -94,7 +94,7 @@ class TestDIMMCSC(asynctest.TestCase):
                         id_ack = await cmd_attr.start(cmd_attr.DataType(), timeout=SHORT_TIMEOUT)
 
             # send enable; new state is ENABLED
-            cmd_attr = getattr(harness.remote, f"cmd_enable")
+            cmd_attr = getattr(harness.remote, "cmd_enable")
             harness.remote.evt_summaryState.flush()
             id_ack = await cmd_attr.start(timeout=SHORT_TIMEOUT)
             state = await harness.remote.evt_summaryState.next(flush=False, timeout=SHORT_TIMEOUT)
@@ -129,7 +129,7 @@ class TestDIMMCSC(asynctest.TestCase):
                 self.assertTrue(False, 'No measurement published by DIMM.')
 
             # send disable; new state is DISABLED
-            cmd_attr = getattr(harness.remote, f"cmd_disable")
+            cmd_attr = getattr(harness.remote, "cmd_disable")
             # this CMD may take some time to complete
             id_ack = await cmd_attr.start(timeout=60.)
             self.assertEqual(id_ack.ack, salobj.SalRetCode.CMD_COMPLETE)
