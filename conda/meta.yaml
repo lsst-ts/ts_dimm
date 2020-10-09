@@ -1,5 +1,4 @@
 {% set data= load_setup_py_data() %}
-{% set name= "ts-dimm" %}
 package:
     name: {{ name }}
     version: {{ data.get('version') }}
@@ -34,7 +33,7 @@ test:
         - ts-dds
         - ts-idl
         - ts-salobj
-        - black
+        - black == 19.10b0
         - sqlalchemy
     source_files:
         - python
