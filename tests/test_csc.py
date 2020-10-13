@@ -42,15 +42,7 @@ class CscTestCase(salobj.BaseCscTestCase, asynctest.TestCase):
         async with self.make_csc(
             initial_state=salobj.State.STANDBY, config_dir=None, simulation_mode=1
         ):
-            await self.check_standard_state_transitions(
-                enabled_commands=(
-                    "start",
-                    "enable",
-                    "disable",
-                    "exitControl",
-                    "standby",
-                ),
-            )
+            await self.check_standard_state_transitions(enabled_commands=(),)
 
     async def test_bin_script(self):
         logging.info("test_bin_script")
