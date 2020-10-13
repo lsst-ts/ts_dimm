@@ -1,3 +1,24 @@
+# This file is part of ts_dimm.
+#
+# Developed for the LSST Data Management System.
+# This product includes software developed by the LSST Project
+# (https://www.lsst.org).
+# See the COPYRIGHT file at the top-level directory of this distribution
+# for details of code ownership.
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 import asyncio
 import types
 import pathlib
@@ -6,7 +27,7 @@ from lsst.ts import salobj
 
 from .model import Model
 
-__all__ = ['DIMMCSC']
+__all__ = ["DIMMCSC"]
 
 SEEING_LOOP_DONE = 101
 """ Seeing loop done (`int`).
@@ -21,12 +42,14 @@ This error code is published in `SALPY_DIMM.DIMM_logevent_errorCodeC` if the cor
 monitors the health and status of the DIMM finishes while the CSC is in enable state.
 """
 
-SIM_CONFIG = types.SimpleNamespace(type="sim",
-                                   avg_seeing=0.5,
-                                   std_seeing=0.1,
-                                   chance_failure=0.,
-                                   time_in_target=2.,
-                                   exposure_time=2.)
+SIM_CONFIG = types.SimpleNamespace(
+    type="sim",
+    avg_seeing=0.5,
+    std_seeing=0.1,
+    chance_failure=0.0,
+    time_in_target=2.0,
+    exposure_time=2.0,
+)
 
 
 class DIMMCSC(salobj.ConfigurableCsc):
@@ -34,8 +57,11 @@ class DIMMCSC(salobj.ConfigurableCsc):
     Commandable SAL Component to interface with the LSST DIMM.
     """
 
-    def __init__(self, index, config_dir=None,
-                 initial_state=salobj.State.STANDBY, initial_simulation_mode=0):
+    valid_simulation_modes = (0, 1)
+
+    def __init__(
+        self, config_dir=None, initial_state=salobj.State.STANDBY, simulation_mode=0,
+    ):
         """
         Initialize DIMM CSC.
 
@@ -44,13 +70,18 @@ class DIMMCSC(salobj.ConfigurableCsc):
         index : int
             Index for the DIMM. This enables the control of multiple DIMMs.
         """
-        schema_path = pathlib.Path(__file__).resolve().parents[4].joinpath("schema", "DIMM.yaml")
+        schema_path = (
+            pathlib.Path(__file__).resolve().parents[4].joinpath("schema", "DIMM.yaml")
+        )
 
-        super().__init__(name="DIMM", index=index,
-                         schema_path=schema_path,
-                         config_dir=config_dir,
-                         initial_state=initial_state,
-                         initial_simulation_mode=initial_simulation_mode)
+        super().__init__(
+            "DIMM",
+            index=0,
+            schema_path=schema_path,
+            config_dir=config_dir,
+            initial_state=initial_state,
+            simulation_mode=simulation_mode,
+        )
 
         self.model = Model(self.log)
 
@@ -82,12 +113,16 @@ class DIMMCSC(salobj.ConfigurableCsc):
         """
 
         if self.simulation_mode == 0:
-            self.log.debug("Simulation mode is off. Configuring CSC for "
-                           f"{config.type} controller.")
+            self.log.debug(
+                "Simulation mode is off. Configuring CSC for "
+                f"{config.type} controller."
+            )
             self.model.setup(config)
         elif self.simulation_mode == 1:
-            self.log.debug("Simulation mode is on. Using default simulation controller."
-                           "Configuration will be ignored.")
+            self.log.debug(
+                "Simulation mode is on. Using default simulation controller."
+                "Configuration will be ignored."
+            )
             self.model.setup(SIM_CONFIG)
 
     async def end_enable(self, id_data):
@@ -159,31 +194,23 @@ class DIMMCSC(salobj.ConfigurableCsc):
 
         await super().begin_standby(id_data)
 
-    async def implement_simulation_mode(self, simulation_mode):
-        if simulation_mode not in (0, 1):
-            raise salobj.ExpectedError(
-                f"Simulation_mode={simulation_mode} must be 0 or 1")
-
-        if self.simulation_mode == simulation_mode:
-            return
-
     async def telemetry_loop(self):
         """Telemetry loop coroutine. This method should only be running if the component is enabled. It will get
         the state of the model controller and output it to the telemetry stream at the heartbeat interval.
         """
         if self.telemetry_loop_running:
-            raise IOError('Telemetry loop still running...')
+            raise IOError("Telemetry loop still running...")
         self.telemetry_loop_running = True
 
         while self.telemetry_loop_running:
             state = self.model.controller.get_status()
             state_topic = self.tel_status.DataType()
-            state_topic.status = state['status']
-            state_topic.hrNum = state['hrnum']
-            state_topic.altitude = state['altitude']
-            state_topic.azimuth = state['azimuth']
-            state_topic.ra = state['ra']
-            state_topic.decl = state['dec']
+            state_topic.status = state["status"]
+            state_topic.hrNum = state["hrnum"]
+            state_topic.altitude = state["altitude"]
+            state_topic.azimuth = state["azimuth"]
+            state_topic.ra = state["ra"]
+            state_topic.decl = state["dec"]
 
             self.tel_status.put(state_topic)
 
@@ -198,7 +225,7 @@ class DIMMCSC(salobj.ConfigurableCsc):
         catch it and take appropriate actions.
         """
         if self.seeing_loop_running:
-            raise IOError('Seeing loop still running...')
+            raise IOError("Seeing loop still running...")
         self.seeing_loop_running = True
 
         while self.seeing_loop_running:
@@ -215,20 +242,28 @@ class DIMMCSC(salobj.ConfigurableCsc):
         while self.csc_running:
             if self.summary_state == salobj.State.ENABLED:
                 if self.seeing_loop_task.done():
+                    error_report = "Seeing loop died while in enable state."
                     self.evt_errorCode.set_put(
                         errorCode=SEEING_LOOP_DONE,
-                        errorReport='Seeing loop died while in enable state.',
-                        traceback=str(self.seeing_loop_task.exception().with_traceback()))
+                        errorReport=error_report,
+                        traceback=str(
+                            self.seeing_loop_task.exception().with_traceback()
+                        ),
+                    )
 
-                    self.summary_state = salobj.State.FAULT
+                    self.fault(code=SEEING_LOOP_DONE, report=error_report)
 
                 if self.telemetry_loop_task.done():
+                    error_report = "Telemetry loop died while in enable state."
                     self.evt_errorCode.put(
                         errorCode=TELEMETRY_LOOP_DONE,
-                        errorReport='Telemetry loop died while in enable state.',
-                        traceback=str(self.telemetry_loop_task.exception().with_traceback()))
+                        errorReport=error_report,
+                        traceback=str(
+                            self.telemetry_loop_task.exception().with_traceback()
+                        ),
+                    )
 
-                    self.summary_state = salobj.State.FAULT
+                    self.fault(code=TELEMETRY_LOOP_DONE, report=error_report)
 
             await asyncio.sleep(self.heartbeat_interval)
 
@@ -254,13 +289,13 @@ class DIMMCSC(salobj.ConfigurableCsc):
         try:
             await asyncio.wait_for(loop, timeout=self.loop_die_timeout)
         except asyncio.CancelledError:
-            self.log.info('Loop cancelled...')
+            self.log.info("Loop cancelled...")
         except Exception as e:
             # Something else may have happened. I still want to disable as this will stop the loop on the
             # target production
             self.log.exception(e)
 
-    async def close(self):
+    async def close(self, exception=None, cancel_start=True):
         """Makes sure CSC closes gratefully.
 
         Basically set `self.csc_running = False` and awaits for
@@ -271,4 +306,4 @@ class DIMMCSC(salobj.ConfigurableCsc):
         self.csc_running = False
         await self.wait_loop(self.health_monitor_loop_task)
 
-        await super().close()
+        await super().close(exception=exception, cancel_start=cancel_start)
