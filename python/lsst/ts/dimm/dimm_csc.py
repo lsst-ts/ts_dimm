@@ -60,7 +60,11 @@ class DIMMCSC(salobj.ConfigurableCsc):
     valid_simulation_modes = (0, 1)
 
     def __init__(
-        self, config_dir=None, initial_state=salobj.State.STANDBY, simulation_mode=0,
+        self,
+        index,
+        config_dir=None,
+        initial_state=salobj.State.STANDBY,
+        simulation_mode=0,
     ):
         """
         Initialize DIMM CSC.
@@ -76,7 +80,7 @@ class DIMMCSC(salobj.ConfigurableCsc):
 
         super().__init__(
             "DIMM",
-            index=0,
+            index=index,
             schema_path=schema_path,
             config_dir=config_dir,
             initial_state=initial_state,
