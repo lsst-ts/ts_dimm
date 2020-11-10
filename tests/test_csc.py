@@ -20,7 +20,6 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import asynctest
-import logging
 
 from lsst.ts import salobj
 from lsst.ts.dimm import dimm_csc
@@ -32,22 +31,21 @@ SHORT_TIMEOUT = 5.0
 class CscTestCase(salobj.BaseCscTestCase, asynctest.TestCase):
     def basic_make_csc(self, initial_state, config_dir, simulation_mode, **kwargs):
         return dimm_csc.DIMMCSC(
+            index=next(index_gen),
             initial_state=initial_state,
             config_dir=config_dir,
             simulation_mode=simulation_mode,
         )
 
     async def test_standard_state_transitions(self):
-        logging.info("test_standard_state_transitions")
         async with self.make_csc(
             initial_state=salobj.State.STANDBY, config_dir=None, simulation_mode=1
         ):
             await self.check_standard_state_transitions(enabled_commands=(),)
 
     async def test_bin_script(self):
-        logging.info("test_bin_script")
         await self.check_bin_script(
-            name="Environment", index=None, exe_name="environment_csc.py"
+            name="DIMM", index=next(index_gen), exe_name="dimm_csc.py"
         )
 
     async def test_dimm_measurement(self):

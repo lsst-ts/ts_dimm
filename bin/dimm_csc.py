@@ -4,4 +4,4 @@ import asyncio
 
 from lsst.ts.dimm.dimm_csc import DIMMCSC
 
-asyncio.run(DIMMCSC.amain(index=None))
+asyncio.run(DIMMCSC.amain(index=True))
