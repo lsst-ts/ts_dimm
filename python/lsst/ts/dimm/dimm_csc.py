@@ -1,8 +1,8 @@
 # This file is part of ts_dimm.
 #
-# Developed for the LSST Data Management System.
-# This product includes software developed by the LSST Project
-# (https://www.lsst.org).
+# Developed for the Vera Rubin Observatory Telescope and Site Systems.
+# This product includes software developed by the Vera Rubin Observatory
+# Project (https://www.lsst.org).
 # See the COPYRIGHT file at the top-level directory of this distribution
 # for details of code ownership.
 #
@@ -32,14 +32,16 @@ __all__ = ["DIMMCSC"]
 SEEING_LOOP_DONE = 101
 """ Seeing loop done (`int`).
 
-This error code is published in `SALPY_DIMM.DIMM_logevent_errorCodeC` if the coroutine that
-gets new seeing data from the controller finishes while the CSC is in enable state.
+This error code is published in `SALPY_DIMM.DIMM_logevent_errorCodeC` if the
+coroutine that gets new seeing data from the controller finishes while the CSC
+is in enable state.
 """
 TELEMETRY_LOOP_DONE = 102
 """ Telemetry loop done (`int`).
 
-This error code is published in `SALPY_DIMM.DIMM_logevent_errorCodeC` if the coroutine that
-monitors the health and status of the DIMM finishes while the CSC is in enable state.
+This error code is published in `SALPY_DIMM.DIMM_logevent_errorCodeC` if the
+coroutine that monitors the health and status of the DIMM finishes while the
+CSC is in enable state.
 """
 
 SIM_CONFIG = types.SimpleNamespace(
@@ -130,11 +132,11 @@ class DIMMCSC(salobj.ConfigurableCsc):
             self.model.setup(SIM_CONFIG)
 
     async def end_enable(self, id_data):
-        """End do_enable; called after state changes
-        but before command acknowledged.
+        """End do_enable; called after state changes but before command
+        acknowledged.
 
-        This method will call `start` on the model controller and start the telemetry
-        and seeing monitoring loops.
+        This method will call `start` on the model controller and start the
+        telemetry and seeing monitoring loops.
 
         Parameters
         ----------
@@ -151,8 +153,8 @@ class DIMMCSC(salobj.ConfigurableCsc):
     async def begin_disable(self, id_data):
         """Begin do_disable; called before state changes.
 
-        This method will try to gracefully stop the telemetry and seeing loops by setting
-        the running flag to False, then stops the model controller.
+        This method will try to gracefully stop the telemetry and seeing loops
+        by setting the running flag to False, then stops the model controller.
 
         Parameters
         ----------
@@ -169,8 +171,9 @@ class DIMMCSC(salobj.ConfigurableCsc):
     async def end_disable(self, id_data):
         """Transition to from `State.ENABLED` to `State.DISABLED`.
 
-        After switching from enable to disable, wait for telemetry and seeing loop to
-        finish. If they take longer then a timeout to finish, cancel the future.
+        After switching from enable to disable, wait for telemetry and seeing
+        loop to finish. If they take longer then a timeout to finish, cancel
+        the future.
 
         Parameters
         ----------
@@ -199,8 +202,9 @@ class DIMMCSC(salobj.ConfigurableCsc):
         await super().begin_standby(id_data)
 
     async def telemetry_loop(self):
-        """Telemetry loop coroutine. This method should only be running if the component is enabled. It will get
-        the state of the model controller and output it to the telemetry stream at the heartbeat interval.
+        """Telemetry loop coroutine. This method should only be running if the
+        component is enabled. It will get the state of the model controller and
+        output it to the telemetry stream at the heartbeat interval.
         """
         if self.telemetry_loop_running:
             raise IOError("Telemetry loop still running...")
@@ -221,12 +225,14 @@ class DIMMCSC(salobj.ConfigurableCsc):
             await asyncio.sleep(self.heartbeat_interval)
 
     async def seeing_loop(self):
-        """Seeing loop coroutine. This method is responsible for getting new measurements from the DIMM
-        controller and and output them as events. The choice of SAL Events instead of SAL Telemetry comes
-        from the fact that the measurements are not periodic. They may take different amount of time depending
-        of the star being used to measure seeing, be interrupted during the selection of a new target and so
-        on. The model controller can just raise an exception in case of an error and the health loop will
-        catch it and take appropriate actions.
+        """Seeing loop coroutine. This method is responsible for getting new
+        measurements from the DIMM controller and and output them as events.
+        The choice of SAL Events instead of SAL Telemetry comes from the fact
+        that the measurements are not periodic. They may take different amounts
+        of time depending on the star being used to measure seeing, be
+        interrupted during the selection of a new target and so on. The model
+        controller can just raise an exception in case of an error and the
+        health loop will catch it and take appropriate actions.
         """
         if self.seeing_loop_running:
             raise IOError("Seeing loop still running...")
@@ -240,8 +246,9 @@ class DIMMCSC(salobj.ConfigurableCsc):
                 self.log.exception(e)
 
     async def health_monitor(self):
-        """This loop monitors the health of the DIMM controller and the seeing and telemetry loops. If an issue happen
-        it will output the `errorCode` event and put the component in FAULT state.
+        """This loop monitors the health of the DIMM controller and the seeing
+        and telemetry loops. If an issue happen it will output the `errorCode`
+        event and put the component in FAULT state.
         """
         while self.csc_running:
             if self.summary_state == salobj.State.ENABLED:
@@ -272,12 +279,12 @@ class DIMMCSC(salobj.ConfigurableCsc):
             await asyncio.sleep(self.heartbeat_interval)
 
     async def wait_loop(self, loop):
-        """A utility method to wait for a task to die or cancel it and handle the aftermath.
+        """A utility method to wait for a task to die or cancel it and handle
+        the aftermath.
 
         Parameters
         ----------
         loop : _asyncio.Future
-
         """
 
         # wait for telemetry loop to die or kill it if timeout
@@ -295,8 +302,8 @@ class DIMMCSC(salobj.ConfigurableCsc):
         except asyncio.CancelledError:
             self.log.info("Loop cancelled...")
         except Exception as e:
-            # Something else may have happened. I still want to disable as this will stop the loop on the
-            # target production
+            # Something else may have happened. I still want to disable as this
+            # will stop the loop on the target production
             self.log.exception(e)
 
     async def close(self, exception=None, cancel_start=True):
