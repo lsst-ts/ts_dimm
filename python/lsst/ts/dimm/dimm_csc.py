@@ -1,8 +1,8 @@
 # This file is part of ts_dimm.
 #
-# Developed for the Vera Rubin Observatory Telescope and Site Systems.
-# This product includes software developed by the Vera Rubin Observatory
-# Project (https://www.lsst.org).
+# Developed for the Vera C. Rubin Observatory Telescope and Site Systems.
+# This product includes software developed by the LSST Project
+# (https://www.lsst.org).
 # See the COPYRIGHT file at the top-level directory of this distribution
 # for details of code ownership.
 #
@@ -21,11 +21,11 @@
 
 import asyncio
 import types
-import pathlib
 
-from lsst.ts import salobj
-
+from .config_schema import CONFIG_SCHEMA
 from .model import Model
+from . import __version__
+from lsst.ts import salobj
 
 __all__ = ["DIMMCSC"]
 
@@ -60,6 +60,7 @@ class DIMMCSC(salobj.ConfigurableCsc):
     """
 
     valid_simulation_modes = (0, 1)
+    version = __version__
 
     def __init__(
         self,
@@ -76,14 +77,10 @@ class DIMMCSC(salobj.ConfigurableCsc):
         index : int
             Index for the DIMM. This enables the control of multiple DIMMs.
         """
-        schema_path = (
-            pathlib.Path(__file__).resolve().parents[4].joinpath("schema", "DIMM.yaml")
-        )
-
         super().__init__(
             "DIMM",
             index=index,
-            schema_path=schema_path,
+            config_schema=CONFIG_SCHEMA,
             config_dir=config_dir,
             initial_state=initial_state,
             simulation_mode=simulation_mode,
