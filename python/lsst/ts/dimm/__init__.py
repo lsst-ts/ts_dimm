@@ -1,8 +1,8 @@
 # This file is part of ts_dimm.
 #
-# Developed for the Vera Rubin Observatory Telescope and Site Systems.
-# This product includes software developed by the Vera Rubin Observatory
-# Project (https://www.lsst.org).
+# Developed for the Vera C. Rubin Observatory Telescope and Site Systems.
+# This product includes software developed by the LSST Project
+# (https://www.lsst.org).
 # See the COPYRIGHT file at the top-level directory of this distribution
 # for details of code ownership.
 #
@@ -25,3 +25,4 @@ except ModuleNotFoundError:
     __version__ = "?"
 
 from .controllers import *  # import all available controllers
+from .config_schema import CONFIG_SCHEMA
