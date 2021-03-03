@@ -1,6 +1,6 @@
 # This file is part of ts_dimm.
 #
-# Developed for the LSST Data Management System.
+# Developed for the Vera C. Rubin Observatory Telescope and Site Systems.
 # This product includes software developed by the LSST Project
 # (https://www.lsst.org).
 # See the COPYRIGHT file at the top-level directory of this distribution
@@ -42,6 +42,16 @@ class CscTestCase(salobj.BaseCscTestCase, asynctest.TestCase):
             initial_state=salobj.State.STANDBY, config_dir=None, simulation_mode=1
         ):
             await self.check_standard_state_transitions(enabled_commands=(),)
+
+    async def test_version(self):
+        async with self.make_csc(
+            initial_state=salobj.State.STANDBY, config_dir=None, simulation_mode=1
+        ):
+            await self.assert_next_sample(
+                self.remote.evt_softwareVersions,
+                cscVersion=dimm_csc.__version__,
+                subsystemVersions="",
+            )
 
     async def test_bin_script(self):
         await self.check_bin_script(

@@ -1,6 +1,6 @@
 {% set data= load_setup_py_data() %}
 package:
-  name: ts-dimm
+  name: "ts-dimm"
   version: {{ data.get('version') }}
 
 source:
@@ -22,13 +22,13 @@ test:
   requires:
     - ts-conda-build
     - sqlalchemy
-    - ts-idl
-    - ts-salobj
+    - ts-dds
+    - ts-idl {{ idl_version }}
+    - ts-salobj {{ salobj_version }}
   source_files:
     - python
     - bin
     - tests
-    - schema
     - setup.cfg
   commands:
     - py.test
