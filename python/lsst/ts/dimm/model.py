@@ -1,16 +1,18 @@
-
 from lsst.ts.dimm import controllers
 
-__all__ = ['Model']
+__all__ = ["Model"]
 
-available_controllers = {'sim': controllers.SimDIMM,
-                         'soar': controllers.SOARDIMM,
-                         'astelco': controllers.AstelcoDIMM}
+available_controllers = {
+    "sim": controllers.SimDIMM,
+    "soar": controllers.SOARDIMM,
+    "astelco": controllers.AstelcoDIMM,
+}
 
 
 class Model:
     """Model to operate generic DIMM controllers.
     """
+
     def __init__(self, log):
 
         self.log = log
@@ -27,10 +29,10 @@ class Model:
         """
 
         if self.controller is not None:
-            self.log.debug('Controller already set. Unsetting.')
+            self.log.debug("Controller already set. Unsetting.")
             self.unset_controller()
 
-        self.controller = available_controllers[config.type](self.log)
+        self.controller = available_controllers[config.controller](self.log)
         self.controller.setup(config)
 
     def unset_controller(self):
