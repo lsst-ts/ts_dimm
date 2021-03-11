@@ -298,8 +298,8 @@ class AstelcoDIMM(BaseDIMM):
         except asyncio.CancelledError:
             self.log.info("Reply handler task cancelled...")
         except Exception as e:
-            # Something else may have happened. I still want to disable as this will stop the loop on the
-            # target production
+            # Something else may have happened. I still want to disable as this
+            # will stop the loop on the target production
             self.log.exception(e)
         finally:
             self.reply_handler_loop = None
@@ -329,9 +329,6 @@ class AstelcoDIMM(BaseDIMM):
         try:
             # timestamp = AstelcoCommand("GET", "DIMM.TIMESTAMP")
             await self.dimm_seeing.cmd_complete_evt.wait()
-
-            # if self.measurement_start is None or timestamp.data[0] > self.measurement_start:
-            #     self.measurement_start = timestamp.data[0]
             return await self.new_measurement()
         except Exception:
             return None

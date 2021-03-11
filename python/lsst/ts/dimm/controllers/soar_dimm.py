@@ -1,4 +1,3 @@
-
 import asyncio
 import sqlalchemy
 import warnings
@@ -6,7 +5,7 @@ import warnings
 from .base_dimm import BaseDIMM, DIMMStatus
 
 
-__all__ = ['SOARDIMM']
+__all__ = ["SOARDIMM"]
 
 
 class SOARDIMM(BaseDIMM):
@@ -20,16 +19,18 @@ class SOARDIMM(BaseDIMM):
     def __init__(self, log):
         super().__init__(log)
 
-        warnings.warn("This class is still under development and will not work as expected. If "
-                      "instantiated, it will start a coroutine that is responsible for grabbing "
-                      "the DIMM data from a sql database but the loop won't do anything. The CSC "
-                      "will look like is running but it will not grab or publish any data.")
+        warnings.warn(
+            "This class is still under development and will not work as expected. If "
+            "instantiated, it will start a coroutine that is responsible for grabbing "
+            "the DIMM data from a sql database but the loop won't do anything. The CSC "
+            "will look like is running but it will not grab or publish any data."
+        )
 
         self.uri = "mysql://user:password@host/database/"
         """The uri address to connect to the DIMM database."""
-        self.table = 'Pachon_seeing'
+        self.table = "Pachon_seeing"
         """Name of the table to query"""
-        self.check_interval = 180.
+        self.check_interval = 180.0
         """The interval to wait before checking the database for new data."""
 
         self.engine = None
@@ -59,13 +60,13 @@ class SOARDIMM(BaseDIMM):
 
     def start(self):
         """Start DIMM. Overwrites method from base class."""
-        self.status['status'] = DIMMStatus['RUNNING']
+        self.status["status"] = DIMMStatus["RUNNING"]
         self.measurement_loop = asyncio.ensure_future(self.check_db_loop())
 
     def stop(self):
         """Stop DIMM. Overwrites method from base class."""
         self.measurement_loop.cancel()
-        self.status['status'] = DIMMStatus['INITIALIZED']
+        self.status["status"] = DIMMStatus["INITIALIZED"]
 
     async def check_db_loop(self):
         """Coroutine to check the database for new measurements.

@@ -36,7 +36,8 @@ class Model:
         self.controller.setup(config)
 
     def unset_controller(self):
-        """Unset controller. This will call unset method on controller and make controller = None.
+        """Unset controller. This will call unset method on controller and make
+        controller = None.
 
         Returns
         -------
