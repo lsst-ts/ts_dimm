@@ -43,7 +43,7 @@ monitors the health and status of the DIMM finishes while the CSC is in enable s
 """
 
 SIM_CONFIG = types.SimpleNamespace(
-    type="sim",
+    controller="sim",
     avg_seeing=0.5,
     std_seeing=0.1,
     chance_failure=0.0,
