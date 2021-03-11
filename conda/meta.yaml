@@ -22,8 +22,8 @@ test:
   requires:
     - ts-conda-build
     - sqlalchemy
-    - ts-idl
-    - ts-salobj
+    - ts-idl {{ idl_version }}
+    - ts-salobj {{ salobj_version }}
   source_files:
     - python
     - bin
