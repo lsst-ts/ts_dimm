@@ -22,10 +22,12 @@
 import asyncio
 import types
 import pathlib
+import traceback
 
 from lsst.ts import salobj
 
 from .model import Model
+from .controllers.base_dimm import DIMMStatus
 
 __all__ = ["DIMMCSC"]
 
@@ -89,6 +91,9 @@ class DIMMCSC(salobj.ConfigurableCsc):
             simulation_mode=simulation_mode,
         )
 
+        # A remote to weather station data
+        self.ws_remote = salobj.Remote(self.domain, "WeatherStation", 1)
+
         self.model = Model(self.log)
 
         self.loop_die_timeout = 5  # nr. of heartbeats to wait for loops to die
@@ -124,6 +129,8 @@ class DIMMCSC(salobj.ConfigurableCsc):
                 f"{config.controller} controller."
             )
             self.model.setup(config)
+            if config.controller == "astelco":
+                self.model.controller.ws_remote = self.ws_remote
         elif self.simulation_mode == 1:
             self.log.debug(
                 "Simulation mode is on. Using default simulation controller."
@@ -164,7 +171,10 @@ class DIMMCSC(salobj.ConfigurableCsc):
         self.telemetry_loop_running = False
         self.seeing_loop_running = False
 
-        self.model.controller.stop()
+        try:
+            self.model.controller.stop()
+        except Exception:
+            self.log.exception("Error in begin_disable. Continuing...")
 
         await super().begin_disable(id_data)
 
@@ -181,9 +191,12 @@ class DIMMCSC(salobj.ConfigurableCsc):
             Command ID and data
         """
 
-        await self.wait_loop(self.telemetry_loop_task)
+        try:
+            await self.wait_loop(self.telemetry_loop_task)
 
-        await self.wait_loop(self.seeing_loop_task)
+            await self.wait_loop(self.seeing_loop_task)
+        except Exception:
+            self.log.exception("Error trying to disable CSC. Continuing.")
 
         await super().end_disable(id_data)
 
@@ -197,7 +210,10 @@ class DIMMCSC(salobj.ConfigurableCsc):
         id_data : `CommandIdData`
             Command ID and data
         """
-        self.model.unset_controller()
+        try:
+            self.model.unset_controller()
+        except Exception:
+            self.log.exception("Error unsetting controller. Continuing.")
 
         await super().begin_standby(id_data)
 
@@ -210,19 +226,34 @@ class DIMMCSC(salobj.ConfigurableCsc):
             raise IOError("Telemetry loop still running...")
         self.telemetry_loop_running = True
 
-        while self.telemetry_loop_running:
-            state = self.model.controller.get_status()
-            state_topic = self.tel_status.DataType()
-            state_topic.status = state["status"]
-            state_topic.hrNum = state["hrnum"]
-            state_topic.altitude = state["altitude"]
-            state_topic.azimuth = state["azimuth"]
-            state_topic.ra = state["ra"]
-            state_topic.decl = state["dec"]
+        try:
+            while self.telemetry_loop_running:
+                state = self.model.controller.get_status()
 
-            self.tel_status.put(state_topic)
+                self.log.debug(f"state: {state}")
 
-            await asyncio.sleep(self.heartbeat_interval)
+                self.tel_status.set_put(
+                    altitude=float(state["altitude"]),
+                    azimuth=float(state["azimuth"]),
+                    ra=float(state["ra"]),
+                    decl=float(state["dec"]),
+                )
+
+                if state["status"] == DIMMStatus["ERROR"]:
+                    self.log.error("DIMM reported error state.")
+                    self.fault(
+                        code=TELEMETRY_LOOP_DONE, report="DIMM reported error state."
+                    )
+                    break
+
+                await asyncio.sleep(self.heartbeat_interval)
+        except Exception:
+            self.log.exception("Error in telemetry loop.")
+            self.fault(
+                code=TELEMETRY_LOOP_DONE,
+                report="Error in telemetry loop.",
+                traceback=traceback.format_exc(),
+            )
 
     async def seeing_loop(self):
         """Seeing loop coroutine. This method is responsible for getting new
@@ -241,9 +272,27 @@ class DIMMCSC(salobj.ConfigurableCsc):
         while self.seeing_loop_running:
             try:
                 data = await self.model.controller.get_measurement()
-                self.evt_dimmMeasurement.set_put(**data)
-            except Exception as e:
-                self.log.exception(e)
+                if data is not None:
+                    self.evt_dimmMeasurement.set_put(**data)
+                await asyncio.sleep(self.heartbeat_interval)
+            except Exception:
+                self.log.exception("Error in seeing loop.")
+                self.fault(
+                    code=SEEING_LOOP_DONE,
+                    report="Error in seeing loop.",
+                    traceback=traceback.format_exc(),
+                )
+                break
+
+    def fault(self, code, report, traceback=""):
+        self.telemetry_loop_running = False
+        self.seeing_loop_running = False
+
+        try:
+            self.model.controller.stop()
+        except Exception:
+            self.log.exception("Error going to FAULT. Ignore.")
+        super().fault(code=code, report=report, traceback=traceback)
 
     async def health_monitor(self):
         """This loop monitors the health of the DIMM controller and the seeing
