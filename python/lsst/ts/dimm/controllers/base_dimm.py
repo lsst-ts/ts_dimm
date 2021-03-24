@@ -51,7 +51,7 @@ class BaseDIMM(abc.ABC):
         }
         self.log = log
 
-    def setup(self, config):
+    async def setup(self, config):
         """Base DIMM setup method.
 
         When subclassing avoid using argv.
@@ -64,19 +64,19 @@ class BaseDIMM(abc.ABC):
         """
         pass
 
-    def unset(self):
+    async def unset(self):
         """Unset SimDim."""
         self.status["status"] = DIMMStatus["NOTSET"]
 
-    def start(self):
+    async def start(self):
         """Start DIMM."""
         self.status["status"] = DIMMStatus["RUNNING"]
 
-    def stop(self):
+    async def stop(self):
         """Stop DIMM."""
         self.status["status"] = DIMMStatus["INITIALIZED"]
 
-    def get_status(self):
+    async def get_status(self):
         """Returns status of the DIMM.
 
         Returns

@@ -53,7 +53,7 @@ class SimDIMM(BaseDIMM):
         self.current_hrnum = 0
         self.current_exptime = 0
 
-    def setup(self, config):
+    async def setup(self, config):
         """Setup SimDim.
 
         Parameters
@@ -93,17 +93,17 @@ class SimDIMM(BaseDIMM):
         if hasattr(config, "std_exposure_time"):
             self.exposure_time["std"] = config.std_exposure_time
 
-    def start(self):
+    async def start(self):
         """Start DIMM. Overwrites method from base class."""
         self.status["status"] = DIMMStatus["RUNNING"]
-        self.measurement_loop = asyncio.ensure_future(self.generate_measurements())
+        self.measurement_loop = asyncio.create_task(self.generate_measurements())
 
-    def stop(self):
+    async def stop(self):
         """Stop DIMM. Overwrites method from base class."""
         self.measurement_loop.cancel()
         self.status["status"] = DIMMStatus["INITIALIZED"]
 
-    def new_measurement(self):
+    async def new_measurement(self):
         """Generate a new measurement for the simulated DIMM.
 
         Returns
@@ -147,7 +147,7 @@ class SimDIMM(BaseDIMM):
 
         return measurement
 
-    def new_hrnum(self):
+    async def new_hrnum(self):
         """Generate a new target for the DIMM. This is basically a new id
         (hrnum) and exposure time.
         """
@@ -157,8 +157,7 @@ class SimDIMM(BaseDIMM):
         self.current_exptime = (rand * delta_time) + self.exposure_time["min"]
 
     async def generate_measurements(self):
-        """Coroutine to generate measurements.
-        """
+        """Coroutine to generate measurements."""
 
         start_time_hrnum = datetime.datetime.now()
         time_in_hrnum = (
@@ -166,7 +165,7 @@ class SimDIMM(BaseDIMM):
             * 60.0
             * 60.0
         )
-        self.new_hrnum()
+        await self.new_hrnum()
 
         while True:
             if time.time() > start_time_hrnum.timestamp() + time_in_hrnum:
@@ -174,8 +173,8 @@ class SimDIMM(BaseDIMM):
                 time_in_hrnum = np.random.uniform(
                     self.time_in_target["min"], self.time_in_target["max"]
                 )
-                self.new_hrnum()
-            measurement = self.new_measurement()
+                await self.new_hrnum()
+            measurement = await self.new_measurement()
             self.measurement_queue.append(measurement)
             await asyncio.sleep(self.last_exposure_time)
 
