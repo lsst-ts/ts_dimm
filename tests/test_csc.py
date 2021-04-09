@@ -19,7 +19,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-import asynctest
+import unittest
 
 from lsst.ts import salobj
 from lsst.ts.dimm import dimm_csc
@@ -28,7 +28,7 @@ index_gen = salobj.index_generator()
 SHORT_TIMEOUT = 5.0
 
 
-class CscTestCase(salobj.BaseCscTestCase, asynctest.TestCase):
+class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
     def basic_make_csc(self, initial_state, config_dir, simulation_mode, **kwargs):
         return dimm_csc.DIMMCSC(
             index=next(index_gen),
@@ -41,7 +41,9 @@ class CscTestCase(salobj.BaseCscTestCase, asynctest.TestCase):
         async with self.make_csc(
             initial_state=salobj.State.STANDBY, config_dir=None, simulation_mode=1
         ):
-            await self.check_standard_state_transitions(enabled_commands=(),)
+            await self.check_standard_state_transitions(
+                enabled_commands=(),
+            )
 
     async def test_version(self):
         async with self.make_csc(
@@ -67,3 +69,6 @@ class CscTestCase(salobj.BaseCscTestCase, asynctest.TestCase):
             )
             # check for a measurement received from dimm
             await self.assert_next_sample(topic=self.remote.evt_dimmMeasurement)
+            await salobj.set_summary_state(
+                remote=self.remote, state=salobj.State.STANDBY
+            )
