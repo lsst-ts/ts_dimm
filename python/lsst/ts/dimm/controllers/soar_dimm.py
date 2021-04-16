@@ -63,7 +63,7 @@ class SOARDIMM(BaseDIMM):
         self.measurement_queue = []
         self.last_measurement = None
 
-    def setup(self, config):
+    async def setup(self, config):
         """Setup SOARDIMM.
 
         Parameters
@@ -76,19 +76,18 @@ class SOARDIMM(BaseDIMM):
         self.check_interval = config.check_interval
         self.engine = sqlalchemy.create_engine(self.uri, pool_recycle=3600)
 
-    def start(self):
+    async def start(self):
         """Start DIMM. Overwrites method from base class."""
         self.status["status"] = DIMMStatus["RUNNING"]
-        self.measurement_loop = asyncio.ensure_future(self.check_db_loop())
+        self.measurement_loop = asyncio.create_task(self.check_db_loop())
 
-    def stop(self):
+    async def stop(self):
         """Stop DIMM. Overwrites method from base class."""
         self.measurement_loop.cancel()
         self.status["status"] = DIMMStatus["INITIALIZED"]
 
     async def check_db_loop(self):
-        """Coroutine to check the database for new measurements.
-        """
+        """Coroutine to check the database for new measurements."""
 
         while True:
 
@@ -112,7 +111,7 @@ class SOARDIMM(BaseDIMM):
             else:
                 await asyncio.sleep(1)
 
-    def _get_mysql(self):
+    async def _get_mysql(self):
         """Connect to the CTIO database and get the seeing data."""
 
         connection = self.engine.connect()
