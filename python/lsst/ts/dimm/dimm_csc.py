@@ -38,18 +38,24 @@ available_controllers = {
 }
 
 SEEING_LOOP_DONE = 101
-""" Seeing loop done (`int`).
+"""Seeing loop done (`int`).
 
-This error code is published in `SALPY_DIMM.DIMM_logevent_errorCodeC` if the
-coroutine that gets new seeing data from the controller finishes while the CSC
-is in enable state.
+This error code is published in `DIMM_logevent_errorCodeC` if the coroutine
+that gets new seeing data from the controller finishes while the CSC is in
+enable state.
 """
 TELEMETRY_LOOP_DONE = 102
-""" Telemetry loop done (`int`).
+"""Telemetry loop done (`int`).
 
-This error code is published in `SALPY_DIMM.DIMM_logevent_errorCodeC` if the
-coroutine that monitors the health and status of the DIMM finishes while the
-CSC is in enable state.
+This error code is published in `DIMM_logevent_errorCodeC` if the coroutine
+that monitors the health and status of the DIMM finishes while the CSC is in
+enable state.
+"""
+CONTROLLER_START_FAILED = 103
+"""Controller Start Failed (`int).
+
+This error code is published in `DIMM_logevent_errorCodeC` if the coroutine
+that starts the controller fails while transititng to enable state.
 """
 
 SIM_CONFIG = types.SimpleNamespace(
@@ -189,7 +195,13 @@ class DIMMCSC(salobj.ConfigurableCsc):
             Command ID and data
         """
 
-        await self.controller.start()
+        try:
+            await self.controller.start()
+        except Exception:
+            self.log.exception(
+                "Failed starting the controller.", report="DIMM reported error state."
+            )
+            self.fault(code=CONTROLLER_START_FAILED)
         self.telemetry_loop_task = asyncio.create_task(self.telemetry_loop())
         self.seeing_loop_task = asyncio.create_task(self.seeing_loop())
 
@@ -280,7 +292,10 @@ class DIMMCSC(salobj.ConfigurableCsc):
                 state_topic.ra = state["ra"]
                 state_topic.decl = state["dec"]
 
-                self.tel_status.put(state_topic)
+                try:
+                    self.tel_status.put(state_topic)
+                except ValueError:
+                    self.log.debug(f"Ignoring bad data {state}")
 
                 if state["status"] == DIMMStatus["ERROR"]:
                     self.log.error("DIMM reported error state.")
