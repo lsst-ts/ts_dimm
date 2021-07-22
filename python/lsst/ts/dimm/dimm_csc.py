@@ -101,6 +101,7 @@ class DIMMCSC(salobj.ConfigurableCsc):
             1,
             readonly=True,
             include=[
+                "weather",
                 "windSpeed",
                 "windDirection",
                 "dewPoint",
