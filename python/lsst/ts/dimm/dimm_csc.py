@@ -328,11 +328,15 @@ class DIMMCSC(salobj.ConfigurableCsc):
         self.seeing_loop_running = True
 
         while self.seeing_loop_running:
+            # Initialize variable so it can be logged later
+            data = None
             try:
                 data = await self.controller.get_measurement()
                 if data is not None:
                     self.evt_dimmMeasurement.set_put(**data)
                 await asyncio.sleep(self.heartbeat_interval)
+            except ValueError:
+                self.log.debug(f"Ignoring bad data {data}")
             except Exception:
                 self.log.exception("Error in seeing loop.")
                 self.fault(
