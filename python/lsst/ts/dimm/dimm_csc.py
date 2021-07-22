@@ -20,6 +20,7 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import asyncio
+import math
 import types
 import traceback
 
@@ -272,6 +273,72 @@ class DIMMCSC(salobj.ConfigurableCsc):
         await super().begin_standby(id_data)
         self.cmd_standby.ack_in_progress(id_data, timeout=60)
 
+    def convert_int(self, value):
+        """Convert a value to an int, or 0 in case the conversion fails.
+
+        Parameters
+        ----------
+        value: `str` or `int`
+            The value to convert.
+
+        Returns
+        -------
+        `int`
+            The value converted to an int, or 0 in case the conversion fails.
+
+        """
+        try:
+            return int(value)
+        except ValueError:
+            return 0
+
+    def convert_float(self, value):
+        """Convert a value to a float, or math.nan in case the conversion
+        fails.
+
+        Parameters
+        ----------
+        value: `str` or `float`
+            The value to convert.
+
+        Returns
+        -------
+        `float`
+            The value converted to a float, or math.nan in case the conversion
+            fails.
+
+        """
+        try:
+            return float(value)
+        except ValueError:
+            return math.nan
+
+    def prepare_status_telemetry(self, state):
+        """Prepare the status telemetry for sending by converting the DIMM
+        state data values to the expected data types, or to math.nan if the
+        conversion fails.
+
+        Parameters
+        ----------
+        state : `dict`
+            Dictionary with DIMM status.
+
+        Returns
+        -------
+        status_topic: `tel_status.DataType`
+            The telescope status telemetry, ready for sending.
+        """
+        status_topic = self.tel_status.DataType()
+
+        status_topic.status = self.convert_int(state["status"])
+        status_topic.hrNum = self.convert_int(state["hrnum"])
+        status_topic.altitude = self.convert_float(state["altitude"])
+        status_topic.azimuth = self.convert_float(state["azimuth"])
+        status_topic.ra = self.convert_float(state["ra"])
+        status_topic.decl = self.convert_float(state["dec"])
+
+        return status_topic
+
     async def telemetry_loop(self):
         """Telemetry loop coroutine. This method should only be running if the
         component is enabled. It will get the state of the controller and
@@ -284,18 +351,12 @@ class DIMMCSC(salobj.ConfigurableCsc):
         try:
             while self.telemetry_loop_running:
                 state = await self.controller.get_status()
-                state_topic = self.tel_status.DataType()
-                state_topic.status = state["status"]
-                state_topic.hrNum = state["hrnum"]
-                state_topic.altitude = state["altitude"]
-                state_topic.azimuth = state["azimuth"]
-                state_topic.ra = state["ra"]
-                state_topic.decl = state["dec"]
+                state_topic = self.prepare_status_telemetry(state)
 
                 try:
                     self.tel_status.put(state_topic)
                 except ValueError:
-                    self.log.debug(f"Ignoring bad data {state}")
+                    self.log.debug(f"Ignoring bad telescope state {state}")
 
                 if state["status"] == DIMMStatus["ERROR"]:
                     self.log.error("DIMM reported error state.")
@@ -313,6 +374,44 @@ class DIMMCSC(salobj.ConfigurableCsc):
                 traceback=traceback.format_exc(),
             )
 
+    def convert_dimmMeasurement_data(self, data):
+        """Prepare the DIMM measurement event for sending by converting the
+        DIMM measurement data values to the expected data types, or to math.nan
+        if the conversion fails.
+
+        Parameters
+        ----------
+        data: `dict`
+            The DIMM measurement data dict.
+
+        Returns
+        -------
+        converted_data: `dict`
+            The DIMM measurement data with the values converted to the expected
+            data types.
+        """
+        converted_data = {
+            "timestamp": self.convert_float(data["timestamp"]),
+            "hrNum": self.convert_int(data["hrNum"]),
+            "secz": self.convert_float(data["secz"]),
+            "fwhm": self.convert_float(data["fwhm"]),
+            "fwhmx": self.convert_float(data["fwhmx"]),
+            "fwhmy": self.convert_float(data["fwhmy"]),
+            "r0": self.convert_float(data["r0"]),
+            "nimg": self.convert_int(data["nimg"]),
+            "dx": self.convert_float(data["dx"]),
+            "dy": self.convert_float(data["dy"]),
+            "flux": self.convert_float(data["flux"]),
+            "fluxL": self.convert_float(data["fluxL"]),
+            "scintL": self.convert_float(data["scintL"]),
+            "strehlL": self.convert_float(data["strehlL"]),
+            "fluxR": self.convert_float(data["fluxR"]),
+            "scintR": self.convert_float(data["scintR"]),
+            "strehlR": self.convert_float(data["strehlR"]),
+        }
+
+        return converted_data
+
     async def seeing_loop(self):
         """Seeing loop coroutine. This method is responsible for getting new
         measurements from the DIMM controller and and output them as events.
@@ -328,11 +427,16 @@ class DIMMCSC(salobj.ConfigurableCsc):
         self.seeing_loop_running = True
 
         while self.seeing_loop_running:
+            # Initialize variable so it can be logged later
+            data = None
             try:
                 data = await self.controller.get_measurement()
                 if data is not None:
-                    self.evt_dimmMeasurement.set_put(**data)
+                    converted_data = self.convert_dimmMeasurement_data(data)
+                    self.evt_dimmMeasurement.set_put(**converted_data)
                 await asyncio.sleep(self.heartbeat_interval)
+            except ValueError:
+                self.log.debug(f"Ignoring bad data {data}")
             except Exception:
                 self.log.exception("Error in seeing loop.")
                 self.fault(
