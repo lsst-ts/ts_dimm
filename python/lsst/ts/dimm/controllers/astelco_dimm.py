@@ -375,6 +375,11 @@ class AstelcoDIMM(BaseDIMM):
             flux_left = AstelcoCommand("GET", "DIMM.FLUX_LEFT")
             flux_right = AstelcoCommand("GET", "DIMM.FLUX_RIGHT")
             airmass = AstelcoCommand("GET", "DIMM.AIRMASS")
+            self.cmd_list[timestamp.id] = timestamp
+            self.cmd_list[seeing.id] = seeing
+            self.cmd_list[flux_left.id] = flux_left
+            self.cmd_list[flux_right.id] = flux_right
+            self.cmd_list[airmass.id] = airmass
             await asyncio.gather(
                 self.run_command(timestamp.id),
                 self.run_command(seeing.id),
