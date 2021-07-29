@@ -189,7 +189,7 @@ class AstelcoDIMM(BaseDIMM):
         # cmd = AstelcoCommand("SET", f"SKY.TEMP=-30.")
         # self.cmd_list[cmd.id] = cmd
         # asyncio.create_task(self.run_command(cmd.id))
-        self.status["status"] = DIMMStatus["RUNNING"]
+        self.status["status"] = DIMMStatus["INITIALIZED"]
 
     async def stop(self):
         """Stop DIMM. Overwrites method from base class."""
@@ -226,12 +226,14 @@ class AstelcoDIMM(BaseDIMM):
         """
         while self.run_status_loop:
             try:
+                ameba_mode = AstelcoCommand("GET", "AMEBA.MODE")
                 scope_status = AstelcoCommand("GET", "SCOPE.STATUS")
                 ra = AstelcoCommand("GET", "SCOPE.RA")
                 dec = AstelcoCommand("GET", "SCOPE.DEC")
                 altitude = AstelcoCommand("GET", "SCOPE.ALT")
                 azimuth = AstelcoCommand("GET", "SCOPE.AZ")
 
+                self.cmd_list[ameba_mode.id] = ameba_mode
                 self.cmd_list[scope_status.id] = scope_status
                 self.cmd_list[ra.id] = ra
                 self.cmd_list[dec.id] = dec
@@ -239,11 +241,13 @@ class AstelcoDIMM(BaseDIMM):
                 self.cmd_list[azimuth.id] = azimuth
 
                 await asyncio.gather(
+                    self.run_command(ameba_mode.id),
                     self.run_command(scope_status.id),
                     self.run_command(ra.id),
                     self.run_command(dec.id),
                     self.run_command(altitude.id),
                     self.run_command(azimuth.id),
+                    ameba_mode.cmd_complete_evt.wait(),
                     scope_status.cmd_complete_evt.wait(),
                     ra.cmd_complete_evt.wait(),
                     dec.cmd_complete_evt.wait(),
@@ -255,7 +259,12 @@ class AstelcoDIMM(BaseDIMM):
                 self.status["dec"] = dec.data[0]
                 self.status["altitude"] = altitude.data[0]
                 self.status["azimuth"] = azimuth.data[0]
-                self.log.debug(f"status: {self.status}")
+
+                self.log.debug(f"AmebaMode = {ameba_mode.data}")
+                # "0" means off, "1" means auto and "2" means manual.
+                if ameba_mode.data[0] == "0":
+                    self.status["status"] = DIMMStatus["RUNNING"]
+                self.log.info(f"status: {self.status}")
             except Exception:
                 self.log.exception("Error in status loop.")
                 self.status["status"] = DIMMStatus["ERROR"]
@@ -330,7 +339,7 @@ class AstelcoDIMM(BaseDIMM):
                 self.log.exception("Error connecting to DIMM controller.")
                 self.status["status"] = DIMMStatus["ERROR"]
             else:
-                self.status["status"] = DIMMStatus["RUNNING"]
+                self.status["status"] = DIMMStatus["INITIALIZED"]
 
     async def disconnect(self):
         """Disconnect from the spectrograph controller's TCP/IP port."""

@@ -23,6 +23,7 @@ import abc
 
 __all__ = ["BaseDIMM", "DIMMStatus"]
 
+"""The status of the DIMM controller."""
 DIMMStatus = {
     "NOTSET": 0,
     "INITIALIZED": 1 << 1,
