@@ -62,6 +62,7 @@ class SimDIMM(BaseDIMM):
             Configuration object
         """
         self.status["status"] = DIMMStatus["INITIALIZED"]
+
         if config.avg_seeing < 0.0:
             raise IOError(
                 "Avg seeing must be larger than zero. Got %f" % config.avg_seeing
