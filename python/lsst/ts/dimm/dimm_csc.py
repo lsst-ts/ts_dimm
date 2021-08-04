@@ -26,6 +26,11 @@ import traceback
 from . import __version__
 from .config_schema import CONFIG_SCHEMA
 from .controllers.base_dimm import DIMMStatus
+from .utils.conversion import (
+    convert_to_float,
+    convert_to_int,
+    convert_dimm_measurement_data,
+)
 from lsst.ts.dimm import controllers
 from lsst.ts import salobj
 
@@ -38,18 +43,24 @@ available_controllers = {
 }
 
 SEEING_LOOP_DONE = 101
-""" Seeing loop done (`int`).
+"""Seeing loop done (`int`).
 
-This error code is published in `SALPY_DIMM.DIMM_logevent_errorCodeC` if the
-coroutine that gets new seeing data from the controller finishes while the CSC
-is in enable state.
+This error code is published in `DIMM_logevent_errorCodeC` if the coroutine
+that gets new seeing data from the controller finishes while the CSC is in
+enable state.
 """
 TELEMETRY_LOOP_DONE = 102
-""" Telemetry loop done (`int`).
+"""Telemetry loop done (`int`).
 
-This error code is published in `SALPY_DIMM.DIMM_logevent_errorCodeC` if the
-coroutine that monitors the health and status of the DIMM finishes while the
-CSC is in enable state.
+This error code is published in `DIMM_logevent_errorCodeC` if the coroutine
+that monitors the health and status of the DIMM finishes while the CSC is in
+enable state.
+"""
+CONTROLLER_START_FAILED = 103
+"""Controller Start Failed (`int).
+
+This error code is published in `DIMM_logevent_errorCodeC` if the coroutine
+that starts the controller fails while transititng to enable state.
 """
 
 SIM_CONFIG = types.SimpleNamespace(
@@ -101,6 +112,7 @@ class DIMMCSC(salobj.ConfigurableCsc):
             1,
             readonly=True,
             include=[
+                "weather",
                 "windSpeed",
                 "windDirection",
                 "dewPoint",
@@ -109,7 +121,9 @@ class DIMMCSC(salobj.ConfigurableCsc):
             ],
         )
 
+        # The controller and its state
         self.controller = None
+        self.controller_running = False
 
         self.loop_die_timeout = 5  # how many heartbeats to wait for the loops to die?
 
@@ -188,7 +202,17 @@ class DIMMCSC(salobj.ConfigurableCsc):
             Command ID and data
         """
 
-        await self.controller.start()
+        try:
+            await self.controller.start()
+        except Exception:
+            self.log.exception(
+                "Failed starting the controller.", report="DIMM reported error state."
+            )
+            self.fault(code=CONTROLLER_START_FAILED)
+            raise RuntimeError(
+                "Failed to start controller. Check configuration and make sure DIMM"
+                "controller is alive and reachable by the CSC."
+            )
         self.telemetry_loop_task = asyncio.create_task(self.telemetry_loop())
         self.seeing_loop_task = asyncio.create_task(self.seeing_loop())
 
@@ -259,6 +283,32 @@ class DIMMCSC(salobj.ConfigurableCsc):
         await super().begin_standby(id_data)
         self.cmd_standby.ack_in_progress(id_data, timeout=60)
 
+    def prepare_status_telemetry(self, state):
+        """Prepare the status telemetry for sending by converting the DIMM
+        state data values to the expected data types, or to math.nan if the
+        conversion fails.
+
+        Parameters
+        ----------
+        state : `dict`
+            Dictionary with DIMM status.
+
+        Returns
+        -------
+        status_topic: `tel_status.DataType`
+            The telescope status telemetry, ready for sending.
+        """
+        status_topic = self.tel_status.DataType()
+
+        status_topic.status = convert_to_int(state["status"])
+        status_topic.hrNum = convert_to_int(state["hrnum"])
+        status_topic.altitude = convert_to_float(state["altitude"])
+        status_topic.azimuth = convert_to_float(state["azimuth"])
+        status_topic.ra = convert_to_float(state["ra"])
+        status_topic.decl = convert_to_float(state["dec"])
+
+        return status_topic
+
     async def telemetry_loop(self):
         """Telemetry loop coroutine. This method should only be running if the
         component is enabled. It will get the state of the controller and
@@ -271,15 +321,14 @@ class DIMMCSC(salobj.ConfigurableCsc):
         try:
             while self.telemetry_loop_running:
                 state = await self.controller.get_status()
-                state_topic = self.tel_status.DataType()
-                state_topic.status = state["status"]
-                state_topic.hrNum = state["hrnum"]
-                state_topic.altitude = state["altitude"]
-                state_topic.azimuth = state["azimuth"]
-                state_topic.ra = state["ra"]
-                state_topic.decl = state["dec"]
+                self.controller_running = state["status"] == DIMMStatus["RUNNING"]
+                self.log.debug(f"Controller running? {self.controller_running}")
 
-                self.tel_status.put(state_topic)
+                state_topic = self.prepare_status_telemetry(state)
+                try:
+                    self.tel_status.put(state_topic)
+                except ValueError:
+                    self.log.debug(f"Ignoring bad telescope state {state}")
 
                 if state["status"] == DIMMStatus["ERROR"]:
                     self.log.error("DIMM reported error state.")
@@ -312,11 +361,17 @@ class DIMMCSC(salobj.ConfigurableCsc):
         self.seeing_loop_running = True
 
         while self.seeing_loop_running:
+            # Initialize variable so it can be logged later
+            data = None
             try:
                 data = await self.controller.get_measurement()
-                if data is not None:
-                    self.evt_dimmMeasurement.set_put(**data)
+                # Only send telemetry if the controller is operational
+                if data is not None and self.controller_running:
+                    converted_data = convert_dimm_measurement_data(data)
+                    self.evt_dimmMeasurement.set_put(**converted_data)
                 await asyncio.sleep(self.heartbeat_interval)
+            except ValueError:
+                self.log.debug(f"Ignoring bad data {data}")
             except Exception:
                 self.log.exception("Error in seeing loop.")
                 self.fault(
