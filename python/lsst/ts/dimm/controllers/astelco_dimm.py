@@ -262,7 +262,7 @@ class AstelcoDIMM(BaseDIMM):
 
                 self.log.debug(f"AmebaMode = {ameba_mode.data}")
                 # "0" means off, "1" means auto and "2" means manual.
-                if ameba_mode.data[0] == "0":
+                if ameba_mode.data[0] != "0":
                     self.status["status"] = DIMMStatus["RUNNING"]
                 self.log.info(f"status: {self.status}")
             except Exception:
