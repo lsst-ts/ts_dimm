@@ -19,16 +19,17 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-import time
-import re
 import asyncio
 from collections import defaultdict
 import enum
+import re
+import time
+
 import numpy as np
+import yaml
 
 from .base_dimm import BaseDIMM, DIMMStatus
-
-from lsst.ts.salobj import index_generator
+from lsst.ts.utils import index_generator
 
 
 __all__ = ["AstelcoDIMM", "AstelcoCommand"]
@@ -160,6 +161,31 @@ class AstelcoDIMM(BaseDIMM):
         self.auto_auth = bool(config.auto_auth)
         self.user = config.user
         self.password = config.password
+
+    def get_config_schema(self):
+        return yaml.safe_load(
+            """
+$schema: http://json-schema.org/draft-07/schema#
+description: Schema for RPiDataClient
+type: object
+properties:
+  host:
+    type: string
+    default: 127.0.0.1
+  port:
+    type: number
+    default: 65432
+  auto_auth:
+    type: boolean
+    default: false
+  user:
+    type: string
+    default: admin
+  password:
+    type: string
+    default: admin
+"""
+        )
 
     async def start(self):
         """Start DIMM. Overwrites method from base class."""

@@ -19,13 +19,14 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-import time
-import datetime
 import asyncio
-
-from .base_dimm import BaseDIMM, DIMMStatus
+import datetime
+import time
 
 import numpy as np
+import yaml
+
+from .base_dimm import BaseDIMM, DIMMStatus
 
 __all__ = ["SimDIMM"]
 
@@ -93,6 +94,46 @@ class SimDIMM(BaseDIMM):
 
         if hasattr(config, "std_exposure_time"):
             self.exposure_time["std"] = config.std_exposure_time
+
+    def get_config_schema(self):
+        return yaml.safe_load(
+            """
+$schema: http://json-schema.org/draft-07/schema#
+description: Schema for RPiDataClient
+type: object
+properties:
+  avg_seeing:
+    type: number
+    exclusiveMinimum: 0.0
+  std_seeing:
+    type: number
+    exclusiveMinimum: 0.0
+  chance_failure:
+    type: number
+    minimum: 0.0
+    maximum: 1.0
+  min_time_in_target:
+    type: number
+    minimum: 1.0
+    maximum: 5.0
+  max_time_in_target:
+    type: number
+    minimum: 5.0
+    maximum: 8.0
+  min_exposure_time:
+    type: number
+    minimum: 0.05
+    maximum: 2.
+  max_exposure_time:
+    type: number
+    minimum: 3.
+    maximum: 5.
+  std_exposure_time:
+    type: number
+    minimum: 0.1
+    maximum: 0.5
+"""
+        )
 
     async def start(self):
         """Start DIMM. Overwrites method from base class."""
