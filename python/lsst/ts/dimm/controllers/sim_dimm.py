@@ -19,13 +19,13 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-import time
-import datetime
 import asyncio
 
-from .base_dimm import BaseDIMM, DIMMStatus
-
 import numpy as np
+import yaml
+
+from .base_dimm import BaseDIMM, DIMMStatus
+from lsst.ts import utils
 
 __all__ = ["SimDIMM"]
 
@@ -94,6 +94,46 @@ class SimDIMM(BaseDIMM):
         if hasattr(config, "std_exposure_time"):
             self.exposure_time["std"] = config.std_exposure_time
 
+    def get_config_schema(self):
+        return yaml.safe_load(
+            """
+$schema: http://json-schema.org/draft-07/schema#
+description: Schema for Simulator DIMM.
+type: object
+properties:
+  avg_seeing:
+    type: number
+    exclusiveMinimum: 0.0
+  std_seeing:
+    type: number
+    exclusiveMinimum: 0.0
+  chance_failure:
+    type: number
+    minimum: 0.0
+    maximum: 1.0
+  min_time_in_target:
+    type: number
+    minimum: 1.0
+    maximum: 5.0
+  max_time_in_target:
+    type: number
+    minimum: 5.0
+    maximum: 8.0
+  min_exposure_time:
+    type: number
+    minimum: 0.05
+    maximum: 2.
+  max_exposure_time:
+    type: number
+    minimum: 3.
+    maximum: 5.
+  std_exposure_time:
+    type: number
+    minimum: 0.1
+    maximum: 0.5
+"""
+        )
+
     async def start(self):
         """Start DIMM. Overwrites method from base class."""
         self.status["status"] = DIMMStatus["RUNNING"]
@@ -113,7 +153,7 @@ class SimDIMM(BaseDIMM):
             A dictionary with the same values of the dimmMeasurement topic SAL
             Event.
         """
-        self.measurement_start = datetime.datetime.now()
+        self.measurement_start = utils.current_tai()
 
         modified_exptime = self.current_exptime + np.random.uniform(
             -self.exposure_time["std"] / 2.0, self.exposure_time["std"] / 2.0
@@ -127,7 +167,7 @@ class SimDIMM(BaseDIMM):
 
         measurement = dict()
         measurement["hrNum"] = self.current_hrnum
-        measurement["timestamp"] = self.measurement_start.timestamp()
+        measurement["timestamp"] = self.measurement_start
         measurement["secz"] = 1.0
         measurement["fwhmx"] = np.random.normal(self.avg_seeing, self.std_seeing)
         measurement["fwhmy"] = np.random.normal(self.avg_seeing, self.std_seeing)
@@ -160,7 +200,7 @@ class SimDIMM(BaseDIMM):
     async def generate_measurements(self):
         """Coroutine to generate measurements."""
 
-        start_time_hrnum = datetime.datetime.now()
+        start_time_hrnum = utils.current_tai()
         time_in_hrnum = (
             np.random.uniform(self.time_in_target["min"], self.time_in_target["max"])
             * 60.0
@@ -169,8 +209,8 @@ class SimDIMM(BaseDIMM):
         await self.new_hrnum()
 
         while True:
-            if time.time() > start_time_hrnum.timestamp() + time_in_hrnum:
-                start_time_hrnum = datetime.datetime.now()
+            if utils.current_tai() > start_time_hrnum + time_in_hrnum:
+                start_time_hrnum = utils.current_tai()
                 time_in_hrnum = np.random.uniform(
                     self.time_in_target["min"], self.time_in_target["max"]
                 )
