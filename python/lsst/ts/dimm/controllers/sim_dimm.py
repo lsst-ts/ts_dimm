@@ -98,7 +98,7 @@ class SimDIMM(BaseDIMM):
         return yaml.safe_load(
             """
 $schema: http://json-schema.org/draft-07/schema#
-description: Schema for RPiDataClient
+description: Schema for Simulator DIMM.
 type: object
 properties:
   avg_seeing:
