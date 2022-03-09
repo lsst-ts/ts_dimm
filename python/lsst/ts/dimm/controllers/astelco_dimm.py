@@ -95,11 +95,7 @@ class AstelcoDIMM(BaseDIMM):
     def __init__(self, log):
         super().__init__(log)
 
-        self.host = _LOCAL_HOST
-        self.port = _DEFAULT_PORT
-        self.auto_auth = False
-        self.user = "admin"
-        self.password = "admin"
+        self.config = None
 
         self.check_interval = 180.0
 
@@ -156,11 +152,7 @@ class AstelcoDIMM(BaseDIMM):
         config : `object`
             Configuration object
         """
-        self.host = config.host
-        self.port = int(config.port)
-        self.auto_auth = bool(config.auto_auth)
-        self.user = config.user
-        self.password = config.password
+        self.config = config
 
     def get_config_schema(self):
         return yaml.safe_load(
@@ -173,7 +165,7 @@ properties:
     type: string
     default: 127.0.0.1
   port:
-    type: number
+    type: integer
     default: 65432
   auto_auth:
     type: boolean
@@ -301,7 +293,7 @@ properties:
     async def connect(self):
         """Connect to the DIMM controller's TCP/IP."""
         async with self.cmd_lock:
-            self.log.debug(f"connecting to: {self.host}:{self.port}")
+            self.log.debug(f"connecting to: {self.config.host}:{self.config.port}")
             if self.connected:
                 self.log.error("Already connected.")
                 self.status["status"] = DIMMStatus["ERROR"]
@@ -309,7 +301,7 @@ properties:
 
             try:
                 self.connect_task = asyncio.open_connection(
-                    host=self.host, port=self.port
+                    host=self.config.host, port=self.config.port
                 )
 
                 self.reader, self.writer = await asyncio.wait_for(
@@ -328,8 +320,10 @@ properties:
                     f"connected: {read_bytes.decode().rstrip()} : Starting authentication"
                 )
 
-                if not self.auto_auth:
-                    auth_str = f"AUTH PLAIN {self.user} {self.password}\r\n"
+                if not self.config.auto_auth:
+                    auth_str = (
+                        f"AUTH PLAIN {self.config.user} {self.config.password}\r\n"
+                    )
 
                     # Write authentication
                     self.writer.write(auth_str.encode())

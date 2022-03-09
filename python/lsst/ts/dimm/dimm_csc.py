@@ -150,12 +150,16 @@ class DIMMCSC(salobj.ConfigurableCsc):
             if instance["sal_index"] == self.salinfo.index:
                 break
         else:
-            raise RuntimeError(f"No config found for sal_index={self.salinfo.index}")
+            raise salobj.ExpectedError(
+                f"No config found for sal_index={self.salinfo.index}"
+            )
 
         settings = types.SimpleNamespace(**instance)
+        self.controller = available_controllers[settings.controller](self.log)
+        # TODO DM-33985 Improve the way the WeatherStation remote is
+        #  initialized in the controller.
         if settings.controller == "astelco":
             self.controller.ws_remote = self.ws_remote
-        self.controller = available_controllers[settings.controller](self.log)
 
         config = settings.config
         config_schema = self.controller.get_config_schema()
@@ -283,16 +287,14 @@ class DIMMCSC(salobj.ConfigurableCsc):
         status_topic: `dict`
             The telescope status telemetry, ready for sending.
         """
-        status_topic = {
-            "status": convert_to_int(state["status"]),
-            "hrNum": convert_to_int(state["hrnum"]),
-            "altitude": convert_to_float(state["altitude"]),
-            "azimuth": convert_to_float(state["azimuth"]),
-            "ra": convert_to_float(state["ra"]),
-            "decl": convert_to_float(state["dec"]),
-        }
-
-        return status_topic
+        return dict(
+            status=convert_to_int(state["status"]),
+            hrNum=convert_to_int(state["hrnum"]),
+            altitude=convert_to_float(state["altitude"]),
+            azimuth=convert_to_float(state["azimuth"]),
+            ra=convert_to_float(state["ra"]),
+            decl=convert_to_float(state["dec"]),
+        )
 
     async def telemetry_loop(self):
         """Telemetry loop coroutine. This method should only be running if the
@@ -385,26 +387,10 @@ class DIMMCSC(salobj.ConfigurableCsc):
             if self.summary_state == salobj.State.ENABLED:
                 if self.seeing_loop_task.done():
                     error_report = "Seeing loop died while in enable state."
-                    await self.evt_errorCode.set_write(
-                        errorCode=SEEING_LOOP_DONE,
-                        errorReport=error_report,
-                        traceback=str(
-                            self.seeing_loop_task.exception().with_traceback()
-                        ),
-                    )
-
                     await self.fault(code=SEEING_LOOP_DONE, report=error_report)
 
                 if self.telemetry_loop_task.done():
                     error_report = "Telemetry loop died while in enable state."
-                    await self.evt_errorCode.set_write(
-                        errorCode=TELEMETRY_LOOP_DONE,
-                        errorReport=error_report,
-                        traceback=str(
-                            self.telemetry_loop_task.exception().with_traceback()
-                        ),
-                    )
-
                     await self.fault(code=TELEMETRY_LOOP_DONE, report=error_report)
 
             await asyncio.sleep(self.heartbeat_interval)

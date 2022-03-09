@@ -20,13 +20,12 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import asyncio
-import datetime
-import time
 
 import numpy as np
 import yaml
 
 from .base_dimm import BaseDIMM, DIMMStatus
+from lsst.ts import utils
 
 __all__ = ["SimDIMM"]
 
@@ -154,7 +153,7 @@ properties:
             A dictionary with the same values of the dimmMeasurement topic SAL
             Event.
         """
-        self.measurement_start = datetime.datetime.now()
+        self.measurement_start = utils.current_tai()
 
         modified_exptime = self.current_exptime + np.random.uniform(
             -self.exposure_time["std"] / 2.0, self.exposure_time["std"] / 2.0
@@ -168,7 +167,7 @@ properties:
 
         measurement = dict()
         measurement["hrNum"] = self.current_hrnum
-        measurement["timestamp"] = self.measurement_start.timestamp()
+        measurement["timestamp"] = self.measurement_start
         measurement["secz"] = 1.0
         measurement["fwhmx"] = np.random.normal(self.avg_seeing, self.std_seeing)
         measurement["fwhmy"] = np.random.normal(self.avg_seeing, self.std_seeing)
@@ -201,7 +200,7 @@ properties:
     async def generate_measurements(self):
         """Coroutine to generate measurements."""
 
-        start_time_hrnum = datetime.datetime.now()
+        start_time_hrnum = utils.current_tai()
         time_in_hrnum = (
             np.random.uniform(self.time_in_target["min"], self.time_in_target["max"])
             * 60.0
@@ -210,8 +209,8 @@ properties:
         await self.new_hrnum()
 
         while True:
-            if time.time() > start_time_hrnum.timestamp() + time_in_hrnum:
-                start_time_hrnum = datetime.datetime.now()
+            if utils.current_tai() > start_time_hrnum + time_in_hrnum:
+                start_time_hrnum = utils.current_tai()
                 time_in_hrnum = np.random.uniform(
                     self.time_in_target["min"], self.time_in_target["max"]
                 )

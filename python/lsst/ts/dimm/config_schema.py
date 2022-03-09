@@ -33,7 +33,7 @@ type: object
 properties:
     instances:
       type: array
-      description: Configuration for each WeatherStation instance.
+      description: Configuration for each DIMM instance.
       minItem: 1
       items:
         type: object
