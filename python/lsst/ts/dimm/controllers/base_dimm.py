@@ -65,6 +65,17 @@ class BaseDIMM(abc.ABC):
         """
         pass
 
+    @abc.abstractmethod
+    def get_config_schema(self):
+        """Get the configuration schema for this DIMM Controller.
+
+        Returns
+        -------
+        `dict`
+            The configuration schema in yaml format.
+        """
+        raise NotImplementedError()
+
     async def unset(self):
         """Unset SimDim."""
         self.status["status"] = DIMMStatus["NOTSET"]

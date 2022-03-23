@@ -4,6 +4,16 @@
 Version History
 ===============
 
+v0.6.0
+------
+* Prepare for salobj 7.
+
+Requires:
+
+* ts_salobj 7
+* ts_idl 3.2
+* IDL file for DIMM from ts_xml 11
+
 v0.5.3
 ------
 * Added documentation.

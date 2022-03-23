@@ -19,19 +19,20 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+import pathlib
 import unittest
 
 from lsst.ts import salobj
 from lsst.ts.dimm import dimm_csc
 
-index_gen = salobj.index_generator()
+TEST_CONFIG_DIR = pathlib.Path(__file__).parents[1].joinpath("tests", "data", "config")
 SHORT_TIMEOUT = 5.0
 
 
 class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
     def basic_make_csc(self, initial_state, config_dir, simulation_mode, **kwargs):
         return dimm_csc.DIMMCSC(
-            index=next(index_gen),
+            index=1,
             initial_state=initial_state,
             config_dir=config_dir,
             simulation_mode=simulation_mode,
@@ -39,7 +40,9 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
 
     async def test_standard_state_transitions(self):
         async with self.make_csc(
-            initial_state=salobj.State.STANDBY, config_dir=None, simulation_mode=1
+            initial_state=salobj.State.STANDBY,
+            config_dir=TEST_CONFIG_DIR,
+            simulation_mode=1,
         ):
             await self.check_standard_state_transitions(
                 enabled_commands=(),
@@ -47,7 +50,9 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
 
     async def test_version(self):
         async with self.make_csc(
-            initial_state=salobj.State.STANDBY, config_dir=None, simulation_mode=1
+            initial_state=salobj.State.STANDBY,
+            config_dir=TEST_CONFIG_DIR,
+            simulation_mode=1,
         ):
             await self.assert_next_sample(
                 self.remote.evt_softwareVersions,
@@ -56,13 +61,13 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
             )
 
     async def test_bin_script(self):
-        await self.check_bin_script(
-            name="DIMM", index=next(index_gen), exe_name="dimm_csc.py"
-        )
+        await self.check_bin_script(name="DIMM", index=1, exe_name="dimm_csc.py")
 
     async def test_dimm_measurement(self):
         async with self.make_csc(
-            initial_state=salobj.State.STANDBY, config_dir=None, simulation_mode=1
+            initial_state=salobj.State.STANDBY,
+            config_dir=TEST_CONFIG_DIR,
+            simulation_mode=1,
         ):
             await salobj.set_summary_state(
                 remote=self.remote, state=salobj.State.ENABLED

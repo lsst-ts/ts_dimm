@@ -63,15 +63,6 @@ This error code is published in `DIMM_logevent_errorCodeC` if the coroutine
 that starts the controller fails while transititng to enable state.
 """
 
-SIM_CONFIG = types.SimpleNamespace(
-    controller="sim",
-    avg_seeing=0.5,
-    std_seeing=0.1,
-    chance_failure=0.0,
-    time_in_target=2.0,
-    exposure_time=2.0,
-)
-
 
 class DIMMCSC(salobj.ConfigurableCsc):
     """
@@ -151,36 +142,34 @@ class DIMMCSC(salobj.ConfigurableCsc):
             as a struct-like object.
 
         """
-
-        if self.simulation_mode == 0:
-            self.log.debug(
-                "Simulation mode is off. Configuring CSC for "
-                f"{config.controller} controller."
-            )
-            await self.setup(config)
-            if config.controller == "astelco":
-                self.controller.ws_remote = self.ws_remote
-        elif self.simulation_mode == 1:
-            self.log.debug(
-                "Simulation mode is on. Using default simulation controller."
-                "Configuration will be ignored."
-            )
-            await self.setup(SIM_CONFIG)
-
-    async def setup(self, config):
-        """Setup the controller with the given setting.
-
-        Parameters
-        ----------
-        config : `object`
-            Namespace with configuration.
-        """
         if self.controller is not None:
             self.log.debug("Controller already set. Unsetting.")
             await self.unset_controller()
 
-        self.controller = available_controllers[config.controller](self.log)
-        await self.controller.setup(config)
+        for instance in config.instances:
+            if instance["sal_index"] == self.salinfo.index:
+                break
+        else:
+            raise salobj.ExpectedError(
+                f"No config found for sal_index={self.salinfo.index}"
+            )
+
+        settings = types.SimpleNamespace(**instance)
+        self.controller = available_controllers[settings.controller](self.log)
+        # TODO DM-33985 Improve the way the WeatherStation remote is
+        #  initialized in the controller.
+        if settings.controller == "astelco":
+            self.controller.ws_remote = self.ws_remote
+
+        config = settings.config
+        config_schema = self.controller.get_config_schema()
+        validator = salobj.DefaultingValidator(config_schema)
+        config_dict = validator.validate(config)
+        if not isinstance(config_dict, dict):
+            raise RuntimeError(f"config {config!r} invalid: not a dict")
+        controller_config = types.SimpleNamespace(**config_dict)
+
+        await self.controller.setup(controller_config)
 
     async def unset_controller(self):
         """Unset controller. This will call unset method on controller and make
@@ -208,7 +197,7 @@ class DIMMCSC(salobj.ConfigurableCsc):
             self.log.exception(
                 "Failed starting the controller.", report="DIMM reported error state."
             )
-            self.fault(code=CONTROLLER_START_FAILED)
+            await self.fault(code=CONTROLLER_START_FAILED)
             raise RuntimeError(
                 "Failed to start controller. Check configuration and make sure DIMM"
                 "controller is alive and reachable by the CSC."
@@ -229,7 +218,7 @@ class DIMMCSC(salobj.ConfigurableCsc):
         id_data : `CommandIdData`
             Command ID and data
         """
-        self.cmd_disable.ack_in_progress(id_data, timeout=60)
+        await self.cmd_disable.ack_in_progress(id_data, timeout=60)
         self.telemetry_loop_running = False
         self.seeing_loop_running = False
 
@@ -281,7 +270,7 @@ class DIMMCSC(salobj.ConfigurableCsc):
             self.log.exception("Error unsetting controller. Continuing.")
 
         await super().begin_standby(id_data)
-        self.cmd_standby.ack_in_progress(id_data, timeout=60)
+        await self.cmd_standby.ack_in_progress(id_data, timeout=60)
 
     def prepare_status_telemetry(self, state):
         """Prepare the status telemetry for sending by converting the DIMM
@@ -295,19 +284,17 @@ class DIMMCSC(salobj.ConfigurableCsc):
 
         Returns
         -------
-        status_topic: `tel_status.DataType`
+        status_topic: `dict`
             The telescope status telemetry, ready for sending.
         """
-        status_topic = self.tel_status.DataType()
-
-        status_topic.status = convert_to_int(state["status"])
-        status_topic.hrNum = convert_to_int(state["hrnum"])
-        status_topic.altitude = convert_to_float(state["altitude"])
-        status_topic.azimuth = convert_to_float(state["azimuth"])
-        status_topic.ra = convert_to_float(state["ra"])
-        status_topic.decl = convert_to_float(state["dec"])
-
-        return status_topic
+        return dict(
+            status=convert_to_int(state["status"]),
+            hrNum=convert_to_int(state["hrnum"]),
+            altitude=convert_to_float(state["altitude"]),
+            azimuth=convert_to_float(state["azimuth"]),
+            ra=convert_to_float(state["ra"]),
+            decl=convert_to_float(state["dec"]),
+        )
 
     async def telemetry_loop(self):
         """Telemetry loop coroutine. This method should only be running if the
@@ -326,13 +313,13 @@ class DIMMCSC(salobj.ConfigurableCsc):
 
                 state_topic = self.prepare_status_telemetry(state)
                 try:
-                    self.tel_status.put(state_topic)
+                    await self.tel_status.set_write(**state_topic)
                 except ValueError:
                     self.log.debug(f"Ignoring bad telescope state {state}")
 
                 if state["status"] == DIMMStatus["ERROR"]:
                     self.log.error("DIMM reported error state.")
-                    self.fault(
+                    await self.fault(
                         code=TELEMETRY_LOOP_DONE, report="DIMM reported error state."
                     )
                     break
@@ -340,7 +327,7 @@ class DIMMCSC(salobj.ConfigurableCsc):
                 await asyncio.sleep(self.heartbeat_interval)
         except Exception:
             self.log.exception("Error in telemetry loop.")
-            self.fault(
+            await self.fault(
                 code=TELEMETRY_LOOP_DONE,
                 report="Error in telemetry loop.",
                 traceback=traceback.format_exc(),
@@ -368,28 +355,28 @@ class DIMMCSC(salobj.ConfigurableCsc):
                 # Only send telemetry if the controller is operational
                 if data is not None and self.controller_running:
                     converted_data = convert_dimm_measurement_data(data)
-                    self.evt_dimmMeasurement.set_put(**converted_data)
+                    await self.evt_dimmMeasurement.set_write(**converted_data)
                 await asyncio.sleep(self.heartbeat_interval)
             except ValueError:
                 self.log.debug(f"Ignoring bad data {data}")
             except Exception:
                 self.log.exception("Error in seeing loop.")
-                self.fault(
+                await self.fault(
                     code=SEEING_LOOP_DONE,
                     report="Error in seeing loop.",
                     traceback=traceback.format_exc(),
                 )
                 break
 
-    def fault(self, code, report, traceback=""):
+    async def fault(self, code, report, traceback=""):
         self.telemetry_loop_running = False
         self.seeing_loop_running = False
 
         try:
-            asyncio.run(self.controller.stop())
+            await self.controller.stop()
         except Exception:
             self.log.exception("Error going to FAULT. Ignore.")
-        super().fault(code=code, report=report, traceback=traceback)
+        await super().fault(code=code, report=report, traceback=traceback)
 
     async def health_monitor(self):
         """This loop monitors the health of the DIMM controller and the seeing
@@ -400,27 +387,11 @@ class DIMMCSC(salobj.ConfigurableCsc):
             if self.summary_state == salobj.State.ENABLED:
                 if self.seeing_loop_task.done():
                     error_report = "Seeing loop died while in enable state."
-                    self.evt_errorCode.set_put(
-                        errorCode=SEEING_LOOP_DONE,
-                        errorReport=error_report,
-                        traceback=str(
-                            self.seeing_loop_task.exception().with_traceback()
-                        ),
-                    )
-
-                    self.fault(code=SEEING_LOOP_DONE, report=error_report)
+                    await self.fault(code=SEEING_LOOP_DONE, report=error_report)
 
                 if self.telemetry_loop_task.done():
                     error_report = "Telemetry loop died while in enable state."
-                    self.evt_errorCode.put(
-                        errorCode=TELEMETRY_LOOP_DONE,
-                        errorReport=error_report,
-                        traceback=str(
-                            self.telemetry_loop_task.exception().with_traceback()
-                        ),
-                    )
-
-                    self.fault(code=TELEMETRY_LOOP_DONE, report=error_report)
+                    await self.fault(code=TELEMETRY_LOOP_DONE, report=error_report)
 
             await asyncio.sleep(self.heartbeat_interval)
 
