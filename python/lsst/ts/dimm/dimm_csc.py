@@ -368,6 +368,50 @@ class DIMMCSC(salobj.ConfigurableCsc):
                 )
                 break
 
+    async def do_gotoAltAz(self, data):
+        """Move to Alt/AZ position.
+
+        Parameters
+        ----------
+        data : A SALOBJ data object
+            Contains the data as defined in the SAL XML file.
+        """
+        self.assert_enabled()
+        raise salobj.ExpectedError("Not implemented yet.")
+
+    async def do_gotoRaDec(self, data):
+        """Move to RA/DEC position.
+
+        Parameters
+        ----------
+        data : A SALOBJ data object
+            Contains the data as defined in the SAL XML file.
+        """
+        self.assert_enabled()
+        raise salobj.ExpectedError("Not implemented yet.")
+
+    async def do_changeDwellRate(self, data):
+        """Change how long to sample for in seconds.
+
+        Parameters
+        ----------
+        data : A SALOBJ data object
+            Contains the data as defined in the SAL XML file.
+        """
+        self.assert_enabled()
+        raise salobj.ExpectedError("Not implemented yet.")
+
+    async def do_changeMeasurementRate(self, data):
+        """Change sample integration.
+
+        Parameters
+        ----------
+        data : A SALOBJ data object
+            Contains the data as defined in the SAL XML file.
+        """
+        self.assert_enabled()
+        raise salobj.ExpectedError("Not implemented yet.")
+
     async def fault(self, code, report, traceback=""):
         self.telemetry_loop_running = False
         self.seeing_loop_running = False

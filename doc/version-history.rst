@@ -3,6 +3,9 @@
 ===============
 Version History
 ===============
+v0.6.1
+
+* Add stubs for new commands
 
 v0.6.0
 ------
