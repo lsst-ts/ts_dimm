@@ -377,9 +377,6 @@ class DIMMCSC(salobj.ConfigurableCsc):
             Contains the data as defined in the SAL XML file.
         """
         self.assert_enabled()
-        self.log.debug(
-            f"NOT YET IMPLEMENTED : Moving DIMM to azimuth"
-        )
         raise salobj.ExpectedError("Not implemented yet.")
 
     async def do_gotoRaDec(self, data):
@@ -391,12 +388,9 @@ class DIMMCSC(salobj.ConfigurableCsc):
             Contains the data as defined in the SAL XML file.
         """
         self.assert_enabled()
-        self.log.debug(
-            f"NOT YET IMPLEMENTED : Moving DIMM to target"
-        )
         raise salobj.ExpectedError("Not implemented yet.")
 
-    async def do_changeDwellRate(self,data):
+    async def do_changeDwellRate(self, data):
         """Change how long to sample for in seconds.
 
         Parameters
@@ -405,12 +399,9 @@ class DIMMCSC(salobj.ConfigurableCsc):
             Contains the data as defined in the SAL XML file.
         """
         self.assert_enabled()
-        self.log.debug(
-            f"NOT YET IMPLEMENTED : Change dwell rate"
-        )
         raise salobj.ExpectedError("Not implemented yet.")
  
-    async def do_changeMeasurementRate(self,data):
+    async def do_changeMeasurementRate(self, data):
         """Change sample integration.
 
         Parameters
@@ -419,11 +410,7 @@ class DIMMCSC(salobj.ConfigurableCsc):
             Contains the data as defined in the SAL XML file.
         """
         self.assert_enabled()
-        self.log.debug(
-            f"NOT YET IMPLEMENTED : Changing measurement rate"
-        )
         raise salobj.ExpectedError("Not implemented yet.")
-
 
     async def fault(self, code, report, traceback=""):
         self.telemetry_loop_running = False
