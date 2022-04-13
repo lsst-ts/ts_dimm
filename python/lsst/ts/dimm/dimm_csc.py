@@ -400,7 +400,7 @@ class DIMMCSC(salobj.ConfigurableCsc):
         """
         self.assert_enabled()
         raise salobj.ExpectedError("Not implemented yet.")
- 
+
     async def do_changeMeasurementRate(self, data):
         """Change sample integration.
 
