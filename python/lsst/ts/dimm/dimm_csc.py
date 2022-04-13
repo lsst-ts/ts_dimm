@@ -368,7 +368,7 @@ class DIMMCSC(salobj.ConfigurableCsc):
                 )
                 break
 
-    async def do_gotoAltAz(self)
+    async def do_gotoAltAz(self, data):
         """Move to Alt/AZ position.
 
         Parameters
@@ -380,8 +380,9 @@ class DIMMCSC(salobj.ConfigurableCsc):
         self.log.debug(
             f"NOT YET IMPLEMENTED : Moving DIMM to azimuth"
         )
+        raise salobj.ExpectedError("Not implemented yet.")
 
-    async def do_gotoRaDec(self)
+    async def do_gotoRaDec(self, data):
         """Move to RA/DEC position.
 
         Parameters
@@ -393,8 +394,9 @@ class DIMMCSC(salobj.ConfigurableCsc):
         self.log.debug(
             f"NOT YET IMPLEMENTED : Moving DIMM to target"
         )
+        raise salobj.ExpectedError("Not implemented yet.")
 
-    async def do_changeDwellRate(self)
+    async def do_changeDwellRate(self,data):
         """Change how long to sample for in seconds.
 
         Parameters
@@ -406,8 +408,9 @@ class DIMMCSC(salobj.ConfigurableCsc):
         self.log.debug(
             f"NOT YET IMPLEMENTED : Change dwell rate"
         )
+        raise salobj.ExpectedError("Not implemented yet.")
  
-    async def do_changeMeasurementRate(self)
+    async def do_changeMeasurementRate(self,data):
         """Change sample integration.
 
         Parameters
@@ -419,6 +422,7 @@ class DIMMCSC(salobj.ConfigurableCsc):
         self.log.debug(
             f"NOT YET IMPLEMENTED : Changing measurement rate"
         )
+        raise salobj.ExpectedError("Not implemented yet.")
 
 
     async def fault(self, code, report, traceback=""):

@@ -3,6 +3,9 @@
 ===============
 Version History
 ===============
+v0.6.1
+
+* Add stubs for new commands
 
 v0.6.0
 ------
@@ -13,7 +16,6 @@ Requires:
 * ts_salobj 7
 * ts_idl 3.2
 * IDL file for DIMM from ts_xml 11
-* Add stubs for new commands
 
 v0.5.3
 ------
