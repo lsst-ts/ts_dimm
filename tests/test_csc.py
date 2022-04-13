@@ -45,8 +45,13 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
             simulation_mode=1,
         ):
             await self.check_standard_state_transitions(
-                enabled_commands=(),
-            )
+                enabled_commands=(
+                    "gotoAltAz",
+                    "gotoRaDec",
+                    "changeDwellRate",
+                    "changeMeasurementRate",
+                ),
+             )
 
     async def test_version(self):
         async with self.make_csc(
