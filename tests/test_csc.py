@@ -51,7 +51,7 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
                     "changeDwellRate",
                     "changeMeasurementRate",
                 ),
-             )
+            )
 
     async def test_version(self):
         async with self.make_csc(
