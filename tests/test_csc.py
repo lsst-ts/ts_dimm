@@ -22,8 +22,8 @@
 import pathlib
 import unittest
 
+from lsst.ts import dimm
 from lsst.ts import salobj
-from lsst.ts.dimm import dimm_csc
 
 TEST_CONFIG_DIR = pathlib.Path(__file__).parents[1].joinpath("tests", "data", "config")
 SHORT_TIMEOUT = 5.0
@@ -31,7 +31,7 @@ SHORT_TIMEOUT = 5.0
 
 class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
     def basic_make_csc(self, initial_state, config_dir, simulation_mode, **kwargs):
-        return dimm_csc.DIMMCSC(
+        return dimm.DIMMCSC(
             index=1,
             initial_state=initial_state,
             config_dir=config_dir,
@@ -61,12 +61,12 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
         ):
             await self.assert_next_sample(
                 self.remote.evt_softwareVersions,
-                cscVersion=dimm_csc.__version__,
+                cscVersion=dimm.__version__,
                 subsystemVersions="",
             )
 
     async def test_bin_script(self):
-        await self.check_bin_script(name="DIMM", index=1, exe_name="dimm_csc.py")
+        await self.check_bin_script(name="DIMM", index=1, exe_name="run_dimm_csc")
 
     async def test_dimm_measurement(self):
         async with self.make_csc(

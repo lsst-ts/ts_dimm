@@ -26,3 +26,4 @@ except ModuleNotFoundError:
 
 from .controllers import *  # import all available controllers
 from .config_schema import CONFIG_SCHEMA
+from .dimm_csc import *

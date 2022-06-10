@@ -34,7 +34,7 @@ from .utils.conversion import (
 from lsst.ts.dimm import controllers
 from lsst.ts import salobj
 
-__all__ = ["DIMMCSC"]
+__all__ = ["DIMMCSC", "run_dimm_csc"]
 
 available_controllers = {
     "sim": controllers.SimDIMM,
@@ -62,6 +62,10 @@ CONTROLLER_START_FAILED = 103
 This error code is published in `DIMM_logevent_errorCodeC` if the coroutine
 that starts the controller fails while transititng to enable state.
 """
+
+
+def run_dimm_csc():
+    asyncio.run(DIMMCSC.amain(index=True))
 
 
 class DIMMCSC(salobj.ConfigurableCsc):
