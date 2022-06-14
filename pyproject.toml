@@ -17,7 +17,7 @@ version = { attr = "setuptools_scm.get_version" }
 where = [ "python" ]
 
 [project.scripts]
-dimm_csc = "lsst.ts.dimm.dimm_csc:dimm_csc"
+run_dimm_csc = "lsst.ts.dimm.dimm_csc:run_dimm_csc"
 
 [tool.setuptools_scm]
 write_to = "python/lsst/ts/dimm/version.py"
