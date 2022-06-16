@@ -3,6 +3,16 @@
 ===============
 Version History
 ===============
+v0.7.0
+------
+* Switch to pyproject.toml.
+
+Requires:
+
+* ts_salobj 7
+* ts_idl 3.2
+* IDL file for DIMM from ts_xml 12
+
 v0.6.1
 
 * Add stubs for new commands
