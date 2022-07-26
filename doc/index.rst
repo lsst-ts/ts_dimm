@@ -11,62 +11,65 @@ DIMM
 .. image:: https://img.shields.io/badge/Jenkins-gray.svg
     :target: https://tssw-ci.lsst.org/job/LSST_Telescope-and-Site/job/ts_dimm/
 
-.. Warning::
-
-   **This CSC documentation is under development and not ready for active use.**
-
-.. _Overview:
-
 Overview
 ========
 
-Controller for the DIMM (Differential Image Motion Monitor) system at Vera C. Rubin Observatory.
+CSC to control and read seeing data from Differential Image Motion Monitor (DIMM) systems at and near Vera C. Rubin Observatory.
 
-As with all CSCs, information on the package, developers and product owners can be found in the `Master CSC Table <ts_xml:index:master-csc-table:DIMM>`_.
+The DIMM CSC controls and reads seeing data from two Astelco DIMMs at Rubin C. Observatory.
+The Astelco DIMM systems run autonomously.
+Each Astelco DIMM consists of a 12 inch Ritchey-Chrétien telescope taking images of target stars at a specific cadence.
+The aperture of the DIMM telescope consists of a mask with a hole on one side and a prism on the other side.
+Due to turbulence in the atmosphere, the wave fronts arriving at the two holes slightly differ, allowing for seeing measurements.
 
-.. note:: If you are interested in viewing other branches of this repository append a `/v` to the end of the url link. For example `https://ts_dimm.lsst.io/v/`
+The DIMM CSC can also read seeing data from a DIMM at SOAR, which is a completely different system than the Astelco DIMMs.
 
+.. _lsst.ts.dimm.user_guide:
 
-.. _User_Documentation:
+User Guide
+==========
 
-User Documentation
-==================
+Start the DIMM CSC as follows:
 
-User-level documentation, found at the link below, is aimed at personnel looking to perform the standard use-cases/operations with the DIMM.
+.. prompt:: bash
+
+    python dimm_csc
+
+Stop the DIMM CSC by sending it to the OFFLINE state.
+
+See `DIMM SAL communication interface <https://ts-xml.lsst.io/sal_interfaces/DIMM.html>`_ for commands, events and telemetry.
+
+Configuration
+-------------
+
+Configuration is defined by `this schema <https://github.com/lsst-ts/ts_dimm/blob/master/python/lsst/ts/dimm/config_schema.py>`_.
+
+Configuration files are located in the `ts_config_ocs repo <https://github.com/lsst-ts/ts_config_ocs>`_.
+
+Simulator
+---------
+
+The DIMM CSC includes a simplistic simulation mode, for testing purpose.
+To run the DIMM CSC in simulation mode:
+
+.. prompt:: bash
+
+    python dimm_csc --simulate
+
+Developer Guide
+===============
+
+Documentation focused on the classes used, API's, and how to participate to the development of the DIMM software packages.
+The Developer Guide also includes links to documentation for the Astelco DIMM.
 
 .. toctree::
-    user-guide/user-guide
-    :maxdepth: 2
-
-.. _Configuration:
-
-Configuring the DIMM
-====================
-
-The configuration for the DIMM is described at the following link.
-
-.. toctree::
-    configuration/configuration
+    developer_guide
     :maxdepth: 1
-
-
-.. _Development_Documentation:
-
-Development Documentation
-=========================
-
-This area of documentation focuses on the classes used, API's, and how to participate to the development of the DIMM software packages.
-
-.. toctree::
-    developer-guide/developer-guide
-    :maxdepth: 1
-
-.. _Version_History:
 
 Version History
 ===============
 The version history of the DIMM is found at the following link.
 
 .. toctree::
-    version-history
+    version_history
     :maxdepth: 1
