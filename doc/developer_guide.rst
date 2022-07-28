@@ -10,9 +10,6 @@ The CSC supports several types of DIMM hardware, including
 * Astelco (used at Rubin Observatory)
 * SOAR
 
-Communication with the Astelco DIMM uses OpenTPL (Open Transfer Protocol Language) over TCP/IP.
-The OpenTPL and Astelco user documentation for DIMM are not available online but can be made available in PDF format upon request.
-
 DIMM API
 ========
 
@@ -43,11 +40,16 @@ An alternative
     pre-commit install # install black hook
     pytest --cov lsst.ts.dimm -ra
 
+Astelco DIMM Software Manuals
+=============================
 
-Updating Astelco DIMM Firmware
-==============================
+Astelco provides the following software manuals:
 
-The firmware of DIMM is not a part of this project.
+* :download:`Overview <astelco_manuals/dev-dimm-general_spec-en_V1-1.pdf>`.
+* :download:`Open transfer protocol language (OpenTPL) <astelco_manuals/opentpl_spec-en_V2-1r32.pdf>`.
+* :download:`Main interface <astelco_manuals/opentpl_spec-en_V2-1r32.pdf>`.
+* :download:`Weather data interface (meteo) <astelco_manuals/dev-dimm-tt-meteo_spec-en_V1-2.pdf>`.
+* :download:`Configuration <astelco_manuals/dev-dimm-config_spec-en_V1-2.pdf>`.
 
 Building the Documentation
 ==========================
