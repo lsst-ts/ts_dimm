@@ -1,6 +1,6 @@
 """Sphinx configuration file for TSSW package"""
 
-from documenteer.conf.pipelinespkg import *  # noqa
+from documenteer.conf.pipelinespkg import *  # type: ignore # noqa
 
 
 project = "ts_dimm"
