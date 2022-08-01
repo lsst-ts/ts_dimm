@@ -19,6 +19,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+import logging
 import pathlib
 import unittest
 
@@ -26,7 +27,13 @@ from lsst.ts import dimm
 from lsst.ts import salobj
 
 TEST_CONFIG_DIR = pathlib.Path(__file__).parents[1].joinpath("tests", "data", "config")
-SHORT_TIMEOUT = 5.0
+SHORT_TIMEOUT = 5
+MEAS_TIMEOUT = 10
+
+log = logging.getLogger()
+log.addHandler(logging.StreamHandler())
+print("num handlers=", len(log.handlers))
+log.setLevel(logging.INFO)
 
 
 class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
@@ -68,7 +75,7 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
     async def test_bin_script(self):
         await self.check_bin_script(name="DIMM", index=1, exe_name="run_dimm_csc")
 
-    async def test_dimm_measurement(self):
+    async def test_astelco_dimm_measurement(self):
         async with self.make_csc(
             initial_state=salobj.State.STANDBY,
             config_dir=TEST_CONFIG_DIR,
@@ -77,8 +84,9 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
             await salobj.set_summary_state(
                 remote=self.remote, state=salobj.State.ENABLED
             )
-            # check for a measurement received from dimm
-            await self.assert_next_sample(topic=self.remote.evt_dimmMeasurement)
-            await salobj.set_summary_state(
-                remote=self.remote, state=salobj.State.STANDBY
+            data = await self.remote.evt_dimmMeasurement.next(
+                flush=True, timeout=MEAS_TIMEOUT
             )
+            assert data.fwhm > 0.1
+            assert data.fluxL > 1000
+            assert data.fluxR > 1000

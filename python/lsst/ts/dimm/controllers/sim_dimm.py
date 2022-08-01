@@ -33,10 +33,12 @@ __all__ = ["SimDIMM"]
 class SimDIMM(BaseDIMM):
     """This controller provides a simmulated DIMM interface that can be used
     for testing and mocking a real DIMM.
+
+    The value of simulate is ignored because this DIMM always simulates.
     """
 
-    def __init__(self, log):
-        super().__init__(log)
+    def __init__(self, log, simulate):
+        super().__init__(log, simulate)
 
         self.avg_seeing = 0.5  # average seeing (arcsec)
         self.std_seeing = 0.1  # standard deviation (arcsec)

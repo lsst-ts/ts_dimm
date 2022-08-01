@@ -37,8 +37,10 @@ class SOARDIMM(BaseDIMM):
     This controller class is still under development.
     """
 
-    def __init__(self, log):
-        super().__init__(log)
+    def __init__(self, log, simulate):
+        if simulate:
+            raise RuntimeError("This DIMM does not yet support simulation.")
+        super().__init__(log, simulate)
 
         warnings.warn(
             "This class is still under development and will not work as expected. If "

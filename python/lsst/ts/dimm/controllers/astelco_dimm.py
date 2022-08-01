@@ -28,17 +28,17 @@ import time
 import numpy as np
 import yaml
 
-from .base_dimm import BaseDIMM, DIMMStatus
+from lsst.ts.tcpip import LOCAL_HOST
 from lsst.ts.utils import index_generator
+
+from .base_dimm import BaseDIMM, DIMMStatus
+from .mock_astelco_dimm import MockAstelcoDIMM
 
 
 __all__ = ["AstelcoDIMM", "AstelcoCommand"]
 
 
 index_gen = index_generator()
-
-_LOCAL_HOST = "127.0.0.1"
-_DEFAULT_PORT = 65432
 
 
 def return_string():
@@ -92,8 +92,8 @@ class AstelcoDIMM(BaseDIMM):
     software.
     """
 
-    def __init__(self, log):
-        super().__init__(log)
+    def __init__(self, log, simulate=False):
+        super().__init__(log=log, simulate=simulate)
 
         self.config = None
 
@@ -113,6 +113,8 @@ class AstelcoDIMM(BaseDIMM):
         self.cmd_list = {}
         self.cmd_max_size = 100
         self.controller_ready = False
+
+        self.mock_dimm = None
 
         self.run_status_loop = True
 
@@ -201,12 +203,16 @@ properties:
         self.ws_remote.tel_precipitation.callback = self.precipitation_callback
         self.ws_remote.tel_snowDepth.callback = self.snow_depth_callback
 
-        # FIXME: Need to add callbacks for SKY module.
-        # To force start of the DIMM we set this value to be lower than
-        # the start operation limit (-20.).
-        # cmd = AstelcoCommand("SET", f"SKY.TEMP=-30.")
-        # self.cmd_list[cmd.id] = cmd
-        # asyncio.create_task(self.run_command(cmd.id))
+        # Set SKY to values that allow automatic operation if WEATHER data
+        # is acceptable (as set by the weather station callbacks).
+        cmd = AstelcoCommand("SET", "SKY.TEMP=-25.0")
+        self.cmd_list[cmd.id] = cmd
+        await self.run_command(cmd.id)
+        await cmd.cmd_complete_evt.wait()
+        cmd = AstelcoCommand("SET", "SKY.STATUS=0")
+        self.cmd_list[cmd.id] = cmd
+        await self.run_command(cmd.id)
+        await cmd.cmd_complete_evt.wait()
         self.status["status"] = DIMMStatus["INITIALIZED"]
 
     async def stop(self):
@@ -292,17 +298,28 @@ properties:
 
     async def connect(self):
         """Connect to the DIMM controller's TCP/IP."""
-        async with self.cmd_lock:
-            self.log.debug(f"connecting to: {self.config.host}:{self.config.port}")
-            if self.connected:
-                self.log.error("Already connected.")
-                self.status["status"] = DIMMStatus["ERROR"]
-                return
+        try:
+            async with self.cmd_lock:
+                if self.connected:
+                    self.log.error("Already connected.")
+                    self.status["status"] = DIMMStatus["ERROR"]
+                    return
 
-            try:
-                self.connect_task = asyncio.open_connection(
-                    host=self.config.host, port=self.config.port
-                )
+                if self.simulate:
+                    self.mock_dimm = MockAstelcoDIMM(
+                        port=0,
+                        log=self.log,
+                        require_authentication=not self.config.auto_auth,
+                    )
+                    await self.mock_dimm.start_task
+                    host = LOCAL_HOST
+                    port = self.mock_dimm.port
+                else:
+                    host = self.config.host
+                    port = self.config.port
+
+                self.log.debug(f"connecting to: {host}:{port}")
+                self.connect_task = asyncio.open_connection(host=host, port=port)
 
                 self.reader, self.writer = await asyncio.wait_for(
                     self.connect_task, timeout=self.connection_timeout
@@ -336,7 +353,7 @@ properties:
                 )
 
                 s = re.search(
-                    r"AUTH\s+(?P<AUTH>\S+)\s+(?P<read_level>\d)\s+(?P<write_level>\d)\n",
+                    r"AUTH\s+(?P<AUTH>\S+)\s+(?P<read_level>\d+)\s+(?P<write_level>\d+)\n",
                     read_bytes.decode(),
                 )
 
@@ -347,26 +364,34 @@ properties:
                 self.read_level = int(s.group("read_level"))
                 self.write_level = int(s.group("write_level"))
 
-                # Start loop to monitor replied.
-                self.log.debug("Start controller reply handler.")
-                self.reply_handler_loop = asyncio.create_task(self.reply_hander())
+            # Start loop to monitor replied.
+            self.log.debug("Start controller reply handler.")
+            self.reply_handler_loop = asyncio.create_task(self.reply_hander())
 
-                # Start status loop
-                self.log.debug("Start status loop.")
-                self.run_status_loop = True
-                self.status_loop_future = asyncio.create_task(self.status_loop())
-            except Exception:
-                self.log.exception("Error connecting to DIMM controller.")
-                self.status["status"] = DIMMStatus["ERROR"]
-            else:
-                self.status["status"] = DIMMStatus["INITIALIZED"]
+            if self.simulate:
+                # In the long run this may need to be called at regular
+                # intervals, but for now the mock controller
+                # just needs it sent once.
+                await self.report_good_mock_weather()
+
+            # Start status loop
+            self.log.debug("Start status loop.")
+            self.run_status_loop = True
+            self.status_loop_future = asyncio.create_task(self.status_loop())
+
+        except Exception:
+            self.log.exception("Error connecting to DIMM controller.")
+            self.status["status"] = DIMMStatus["ERROR"]
+        else:
+            self.status["status"] = DIMMStatus["INITIALIZED"]
 
     async def disconnect(self):
         """Disconnect from the spectrograph controller's TCP/IP port."""
 
         try:
-            self.reply_handler_loop.cancel()
-            await self.reply_handler_loop
+            if self.reply_handler_loop:
+                self.reply_handler_loop.cancel()
+                await self.reply_handler_loop
         except asyncio.CancelledError:
             self.log.info("Reply handler task cancelled...")
         except Exception as e:
@@ -398,24 +423,30 @@ properties:
             Event.
         """
 
+        prev_timestamp = 0.0
         try:
-            timestamp = AstelcoCommand("GET", "DIMM.TIMESTAMP")
+            timestamp_cmd = AstelcoCommand("GET", "DIMM.TIMESTAMP")
+            self.cmd_list[timestamp_cmd.id] = timestamp_cmd
+            await self.run_command(timestamp_cmd.id)
+            await timestamp_cmd.cmd_complete_evt.wait()
+            timestamp = float(timestamp_cmd.data[0])
+            if timestamp == prev_timestamp:
+                return None
+            prev_timestamp = timestamp
+
             seeing = AstelcoCommand("GET", "DIMM.SEEING")
             flux_left = AstelcoCommand("GET", "DIMM.FLUX_LEFT")
             flux_right = AstelcoCommand("GET", "DIMM.FLUX_RIGHT")
             airmass = AstelcoCommand("GET", "DIMM.AIRMASS")
-            self.cmd_list[timestamp.id] = timestamp
             self.cmd_list[seeing.id] = seeing
             self.cmd_list[flux_left.id] = flux_left
             self.cmd_list[flux_right.id] = flux_right
             self.cmd_list[airmass.id] = airmass
             await asyncio.gather(
-                self.run_command(timestamp.id),
                 self.run_command(seeing.id),
                 self.run_command(flux_left.id),
                 self.run_command(flux_right.id),
                 self.run_command(airmass.id),
-                timestamp.cmd_complete_evt.wait(),
                 seeing.cmd_complete_evt.wait(),
                 flux_left.cmd_complete_evt.wait(),
                 flux_right.cmd_complete_evt.wait(),
@@ -430,7 +461,7 @@ properties:
             measurement = dict()
 
             measurement["hrNum"] = 0
-            measurement["timestamp"] = timestamp.data[0]
+            measurement["timestamp"] = timestamp
             measurement["secz"] = airmass.data[0]
             measurement["fwhmx"] = -1
             measurement["fwhmy"] = -1
@@ -511,7 +542,6 @@ properties:
         self.log.debug(f"run_command: {self.cmd_list[cmdid].encode()}")
 
         async with self.cmd_lock:
-
             if not self.connected:
                 if (
                     want_connection
@@ -727,3 +757,35 @@ properties:
             cmd = AstelcoCommand("SET", f"WEATHER.RAIN={snow_value}")
             self.cmd_list[cmd.id] = cmd
             await self.run_command(cmd.id)
+
+    async def report_good_mock_weather(self):
+        """Call the weather callbacks with data that allows auto operation.
+
+        Call the fewest callbacks required. This will only do the job
+        if none of the other weather callbacks has been called with
+        weather data that prevents automatic operation.
+
+        Raises
+        ------
+        RuntimeError
+            If not simulating.
+        """
+        if not self.simulate:
+            raise RuntimeError("Only allowed in simulation mode.")
+
+        await self.weather_callback(
+            self.ws_remote.tel_weather.DataType(
+                ambient_temp=0,
+                humidity=self.mock_dimm.config.HumLow * 0.9,
+                pressure=0.5,
+            )
+        )
+        await self.wind_speed_callback(
+            self.ws_remote.tel_windSpeed.DataType(
+                avg2M=self.mock_dimm.config.WindLow * 0.9,
+                value=self.mock_dimm.config.WindLow * 0.9,
+            )
+        )
+        await self.precipitation_callback(
+            self.ws_remote.tel_precipitation.DataType(prSum1M=0)
+        )
