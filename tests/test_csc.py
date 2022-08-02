@@ -31,8 +31,9 @@ SHORT_TIMEOUT = 5
 MEAS_TIMEOUT = 10
 
 log = logging.getLogger()
-log.addHandler(logging.StreamHandler())
-print("num handlers=", len(log.handlers))
+handler = logging.StreamHandler()
+handler.setFormatter(logging.Formatter("%(created)0.2f %(levelname)s: %(message)s"))
+log.addHandler(handler)
 log.setLevel(logging.INFO)
 
 
