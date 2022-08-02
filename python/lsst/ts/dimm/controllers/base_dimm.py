@@ -50,7 +50,7 @@ class BaseDIMM(abc.ABC):
             "azimuth": 0.0,
             "hrnum": 0,
         }
-        self.log = log
+        self.log = log.getChild(type(self).__name__)
         self.simulate = simulate
 
     async def setup(self, config):

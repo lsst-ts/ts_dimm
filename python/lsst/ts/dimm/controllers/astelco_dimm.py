@@ -18,27 +18,26 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
+__all__ = ["AstelcoDIMM"]
 
 import asyncio
 from collections import defaultdict
 import enum
+import math
 import re
-import time
 
-import numpy as np
 import yaml
 
-from lsst.ts.tcpip import LOCAL_HOST
-from lsst.ts.utils import index_generator
+from lsst.ts.tcpip import LOCAL_HOST, close_stream_writer
+from lsst.ts.utils import index_generator, make_done_future
+from .astelco_enums import TERMINATOR, RainState, SkyStatus
 
 from .base_dimm import BaseDIMM, DIMMStatus
 from .mock_astelco_dimm import MockAstelcoDIMM
 
 
-__all__ = ["AstelcoDIMM", "AstelcoCommand"]
-
-
-index_gen = index_generator()
+class CommandError(Exception):
+    pass
 
 
 def return_string():
@@ -59,37 +58,88 @@ class CMDStatus(enum.IntEnum):
 
 
 class AstelcoCommand:
-    """Represent the command interaction with the astelco controller."""
+    """An Astelco Command.
 
-    def __init__(self, cmd, obj):
-        self.id = next(index_gen)
-        self.cmd = cmd
-        self.object = obj
-        self.send_time = time.time()
-        self.cmd_complete_evt = asyncio.Event()
-        self.cmd_complete_evt.clear()
+    Parameters
+    ----------
+    name : `str`
+        Command name, e.g. "SET" or "GET"
+    arg : `str`
+        Command argument.
+    """
 
-        self.received = []
+    index_gen = index_generator()
+
+    def __init__(self, name, arg):
+        self.name = name
+        self.arg = arg
+        self.id = next(self.index_gen)
+        self.done_task = asyncio.Future()
+
+        self.replies = []
         self.events = []
         self.dtype = str
         self.status = None
         self.allstatus = []
-        self.run = False
-        self.ok = False
-        self.complete = False
-        self.data = []
-        self.complete_time = None
 
-    def encode(self):
-        self.send_time = time.time()
-        return f"{self.id} {self.cmd} {self.object}\r\n".encode()
+        # Dict of variable name: (isok, value)
+        # where isok is a bool and value is a string that is one of:
+        #
+        # * The variable's value, as a str, for a get command of a variable.
+        # * The variable's property, as a str representation of an int,
+        #   for a get command of a property. Note that the variable name
+        #   will end with "!{property_name}", just like in the get command.
+        # * "" for a set command, since only the isok flag is of interest.
+        self.data = {}
+
+    def format(self):
+        return f"{self.id} {self.name} {self.arg}"
+
+    def get_value(self, name, dtype, bad_value=None):
+        """Get a variable's value."""
+        isok, strvalue = self.data[name]
+        if not isok:
+            return bad_value
+        return dtype(strvalue)
+
+    def get_float(self, name):
+        return self.get_value(name=name, dtype=float, bad_value=math.nan)
+
+    def get_int(self, name, bad_value=0):
+        return self.get_value(name=name, dtype=int, bad_value=bad_value)
+
+    def __str__(self):
+        return self.format()
+
+    def __repr__(self):
+        return f"AstelcoCommand(id={self.id}, name={self.name}, arg={self.arg})"
+
+
+def assert_command_not_none(cmdid, command):
+    """Raise CommandError if the command is None"""
+    if command is None:
+        raise CommandError(f"Unrecognized command {cmdid}")
 
 
 class AstelcoDIMM(BaseDIMM):
-    """This controller provides an interface to Astelco autonomous DIMMs.
-    Astelco is providing the DIMM hardware and software controller for LSST
-    and this controller interface is responsible for interfacing with their
-    software.
+    r"""Client for an Astelco autonomous DIMM.
+
+    Notes
+    -----
+    Known limitations:
+    * The reply parser does not handle variable names with square brackets,
+      such as AXIS[0-1] or AXIS[0] or AXIS[0,1]. Do not try to get or set
+      variables defined this way.
+    * The command writer and reply reader makes no attempt to encode special
+      characters in strings. The only place we write strings (at present)
+      is optionally writing username and password. Those will have to be
+      handled specially if they contain special chars. The rules for sending
+      string data are as follows:
+
+      * Only ASCII is allowed.
+      * Replace backslash, double quote and all chars not in range 32-255
+        with their hex value as \xhh or octal value as \ooo.
+      * Surround the string with double quotes.
     """
 
     def __init__(self, log, simulate=False):
@@ -109,17 +159,18 @@ class AstelcoDIMM(BaseDIMM):
         self.reader = None
         self.writer = None
 
-        self.cmd_lock = asyncio.Lock()
-        self.cmd_list = {}
+        # Lock to prevent commands from being sent
+        # until authorization is complete.
+        self.auth_lock = asyncio.Lock()
+        # Dict of command ID: AstelcoCommand
+        self.running_commands = {}
         self.cmd_max_size = 100
         self.controller_ready = False
 
         self.mock_dimm = None
 
-        self.run_status_loop = True
-
-        self.reply_handler_loop = None
-        self.status_loop_future = None
+        self.reply_loop_task = make_done_future()
+        self.status_loop_task = make_done_future()
         self.measurement_start = None
         self.measurement_queue = []
         self.last_measurement = None
@@ -127,24 +178,40 @@ class AstelcoDIMM(BaseDIMM):
         # A remote to weather station data
         self.ws_remote = None
 
-        self.dimm_seeing = AstelcoCommand("GET", "EVENT")
-        self.dimm_seeing_lowfreq = AstelcoCommand("GET", "EVENT")
+        # The DIMM WEATHER.RAIN is set based on two separate weather station
+        # topics: tel_precipitation and tel_snowDepth.
+        self.is_raining = False
+        self.is_snowing = False
 
-        self.rain_value = False
-        self.snow_value = False
-        """Rain and snow values to be sent to the DIMM controller. This value
-        is constructed with information from both rain and snow sensors which
-        are captured by two different callback functions. I'll Keep it as a
-        global value and set it whenever it is needed.
-        """
-
-        self._expect = [
-            r"(?P<CMDID>\d+) DATA INLINE (?P<OBJECT>\S+)=(?P<VALUE>.+)",
-            r"(?P<CMDID>\d+) DATA OK (?P<OBJECT>\S+)",
-            r"(?P<CMDID>\d+) COMMAND (?P<STATUS>\S+)",
-            r"(?P<CMDID>\d+) EVENT INFO (?P<OBJECT>\S+):(?P<ENCM>(.*?)\s*): (?P<VALUE>.+)",
-            r"(?P<CMDID>\d+) EVENT ERROR (?P<OBJECT>\S+):(?P<ENCM>(.*?)\s*)",
-        ]
+        # Dict of compiled regular expression: method to call
+        # to handle replies from the DIMM. The reply is stripped of the
+        # final \n and surrounding whitespace before matching.
+        self.dispatcher_dict = {
+            re.compile(regex_str): method
+            for regex_str, method in (
+                (
+                    r"(?P<cmdid>\d+) +COMMAND +(?P<state>\S+)( +(?P<message>.*))?",
+                    self.handle_command,
+                ),
+                (
+                    r"^(?P<cmdid>\d+) +DATA +ERROR +(?P<name>\S+) +(?P<error>.+)$",
+                    self.handle_data_error,
+                ),
+                (
+                    r"^(?P<cmdid>\d+) +DATA +INLINE +(?P<name>\S+)=(?P<value>.+)$",
+                    self.handle_data_inline,
+                ),
+                (
+                    r"^(?P<cmdid>\d+) +DATA +OK +(?P<name>\S+)",
+                    self.handle_data_ok,
+                ),
+                (
+                    r"(?P<cmdid>\d+) +EVENT +(?P<event_type>\S+) +"
+                    r"(?P<name>\S+):(?P<number>\d+)( +(?P<description>.+))?",
+                    self.handle_event,
+                ),
+            )
+        }
 
     async def setup(self, config):
         """Setup controller.
@@ -186,41 +253,35 @@ properties:
 
         await self.connect()
 
-        # weather_callback updates information about:
-        # - ambient_temp
-        # - humidity
-        # - pressure
         if self.ws_remote is None:
             self.status["status"] = DIMMStatus["ERROR"]
-            raise RuntimeError("No WeatherStation remote available.")
+            raise RuntimeError("No WeatherStation remote available")
 
-        self.ws_remote.tel_weather.callback = self.weather_callback
-
-        # self explanatory callbacks...
-        self.ws_remote.tel_windSpeed.callback = self.wind_speed_callback
-        self.ws_remote.tel_windDirection.callback = self.wind_direction_callback
-        self.ws_remote.tel_dewPoint.callback = self.dew_point_callback
-        self.ws_remote.tel_precipitation.callback = self.precipitation_callback
-        self.ws_remote.tel_snowDepth.callback = self.snow_depth_callback
+        if not self.simulate:
+            # Set weather station callbacks.
+            self.ws_remote.tel_weather.callback = self.weather_callback
+            self.ws_remote.tel_windSpeed.callback = self.wind_speed_callback
+            self.ws_remote.tel_windDirection.callback = self.wind_direction_callback
+            self.ws_remote.tel_dewPoint.callback = self.dew_point_callback
+            self.ws_remote.tel_precipitation.callback = self.precipitation_callback
+            self.ws_remote.tel_snowDepth.callback = self.snow_depth_callback
 
         # Set SKY to values that allow automatic operation if WEATHER data
         # is acceptable (as set by the weather station callbacks).
-        cmd = AstelcoCommand("SET", "SKY.TEMP=-25.0")
-        self.cmd_list[cmd.id] = cmd
-        await self.run_command(cmd.id)
-        await cmd.cmd_complete_evt.wait()
-        cmd = AstelcoCommand("SET", "SKY.STATUS=0")
-        self.cmd_list[cmd.id] = cmd
-        await self.run_command(cmd.id)
-        await cmd.cmd_complete_evt.wait()
+        # SKY.TEMP must be <= 20 to run (with the default DIMM config).
+        await self.run_command("SET", "SKY.TEMP=-25.0")
+        await self.run_command("SET", f"SKY.status={SkyStatus.CLEAR}")
         self.status["status"] = DIMMStatus["INITIALIZED"]
 
     async def stop(self):
         """Stop DIMM. Overwrites method from base class."""
 
+        # Tell the DIMM to close up (1=preciptating)
+        await self.run_command("SET", f"SKY.status={SkyStatus.PRECIPTATING}")
+
         if self.ws_remote is None:
             self.status["status"] = DIMMStatus["ERROR"]
-            raise RuntimeError("No WeatherStation remote available.")
+            raise RuntimeError("No WeatherStation remote available")
 
         self.ws_remote.tel_weather.callback = None
         self.ws_remote.tel_windSpeed.callback = None
@@ -229,144 +290,99 @@ properties:
         self.ws_remote.tel_precipitation.callback = None
         self.ws_remote.tel_snowDepth.callback = None
 
-        # FIXME: For action operations...
-        # If the controller is stopped, force close out of the DIMM. If
-        # will close anyway if value stops being updated.
-        # To force stop of the DIMM we set this value to be higher than
-        # the close operation limit (-10.).
-        # cmd = AstelcoCommand("SET", f"SKY.TEMP=0.")
-        # self.cmd_list[cmd.id] = cmd
-        # asyncio.create_task(self.run_command(cmd.id))
-        self.status_loop_future.cancel()
+        self.status_loop_task.cancel()
 
         # TODO: Change to STOPPED?
         self.status["status"] = DIMMStatus["INITIALIZED"]
-        self.run_status_loop = False
         await self.disconnect()
 
     async def status_loop(self):
         """Monitor DIMM status and update `self.status` dictionary
         information.
         """
-        while self.run_status_loop:
-            try:
-                ameba_mode = AstelcoCommand("GET", "AMEBA.MODE")
-                scope_status = AstelcoCommand("GET", "SCOPE.STATUS")
-                ra = AstelcoCommand("GET", "SCOPE.RA")
-                dec = AstelcoCommand("GET", "SCOPE.DEC")
-                altitude = AstelcoCommand("GET", "SCOPE.ALT")
-                azimuth = AstelcoCommand("GET", "SCOPE.AZ")
-
-                self.cmd_list[ameba_mode.id] = ameba_mode
-                self.cmd_list[scope_status.id] = scope_status
-                self.cmd_list[ra.id] = ra
-                self.cmd_list[dec.id] = dec
-                self.cmd_list[altitude.id] = altitude
-                self.cmd_list[azimuth.id] = azimuth
-
-                await asyncio.gather(
-                    self.run_command(ameba_mode.id),
-                    self.run_command(scope_status.id),
-                    self.run_command(ra.id),
-                    self.run_command(dec.id),
-                    self.run_command(altitude.id),
-                    self.run_command(azimuth.id),
-                    ameba_mode.cmd_complete_evt.wait(),
-                    scope_status.cmd_complete_evt.wait(),
-                    ra.cmd_complete_evt.wait(),
-                    dec.cmd_complete_evt.wait(),
-                    altitude.cmd_complete_evt.wait(),
-                    azimuth.cmd_complete_evt.wait(),
+        self.log.debug("Status loop begins")
+        try:
+            while self.connected:
+                status_cmd = await self.run_command(
+                    "GET",
+                    "AMEBA.MODE;SCOPE.RA;SCOPE.DEC;SCOPE.ALT;SCOPE.AZ",
                 )
 
-                self.status["ra"] = ra.data[0]
-                self.status["dec"] = dec.data[0]
-                self.status["altitude"] = altitude.data[0]
-                self.status["azimuth"] = azimuth.data[0]
+                ameba_mode = status_cmd.get_int("AMEBA.MODE")
+                self.status["ra"] = status_cmd.get_float("SCOPE.RA")
+                self.status["dec"] = status_cmd.get_float("SCOPE.DEC")
+                self.status["altitude"] = status_cmd.get_float("SCOPE.ALT")
+                self.status["azimuth"] = status_cmd.get_float("SCOPE.AZ")
 
-                self.log.debug(f"AmebaMode = {ameba_mode.data}")
+                self.log.debug(f"AMEBA.MODE = {ameba_mode}")
                 # "0" means off, "1" means auto and "2" means manual.
-                if ameba_mode.data[0] != "0":
+                if ameba_mode != 0:
                     self.status["status"] = DIMMStatus["RUNNING"]
-                self.log.info(f"status: {self.status}")
-            except Exception:
-                self.log.exception("Error in status loop.")
-                self.status["status"] = DIMMStatus["ERROR"]
-                break
 
             await asyncio.sleep(1.0)
+        except asyncio.CancelledError:
+            pass
+        except Exception:
+            self.log.exception("Status loop failed")
+            self.status["status"] = DIMMStatus["ERROR"]
+        finally:
+            self.log.debug("Status loop ends")
 
     async def connect(self):
         """Connect to the DIMM controller's TCP/IP."""
+        self.reply_loop_task.cancel()
         try:
-            async with self.cmd_lock:
-                if self.connected:
-                    self.log.error("Already connected.")
-                    self.status["status"] = DIMMStatus["ERROR"]
-                    return
+            if self.connected:
+                self.log.error("Already connected")
+                self.status["status"] = DIMMStatus["ERROR"]
+                return
 
-                if self.simulate:
-                    self.mock_dimm = MockAstelcoDIMM(
-                        port=0,
-                        log=self.log,
-                        require_authentication=not self.config.auto_auth,
-                    )
-                    await self.mock_dimm.start_task
-                    host = LOCAL_HOST
-                    port = self.mock_dimm.port
-                else:
-                    host = self.config.host
-                    port = self.config.port
+            if self.simulate:
+                self.mock_dimm = MockAstelcoDIMM(
+                    port=0,
+                    log=self.log,
+                    require_authentication=not self.config.auto_auth,
+                )
+                await self.mock_dimm.start_task
+                host = LOCAL_HOST
+                port = self.mock_dimm.port
+            else:
+                host = self.config.host
+                port = self.config.port
 
-                self.log.debug(f"connecting to: {host}:{port}")
-                self.connect_task = asyncio.open_connection(host=host, port=port)
+            self.log.debug(f"Connecting to: {host}:{port}")
+            self.connect_task = asyncio.open_connection(host=host, port=port)
 
-                self.reader, self.writer = await asyncio.wait_for(
-                    self.connect_task, timeout=self.connection_timeout
+            self.reader, self.writer = await asyncio.wait_for(
+                self.connect_task, timeout=self.connection_timeout
+            )
+
+            # Read welcome message
+            reply = await asyncio.wait_for(self.read_reply(), timeout=self.read_timeout)
+            if "TPL" not in reply:
+                raise RuntimeError("No welcome message from controller")
+
+            if not self.config.auto_auth:
+                # Authenticate
+                await self.write_cmdstr(
+                    f'AUTH PLAIN "{self.config.user}" "{self.config.password}"'
                 )
 
-                # Read welcome message
-                read_bytes = await asyncio.wait_for(
-                    self.reader.readuntil("\n".encode()), timeout=self.read_timeout
-                )
+            # Get reply from auth. This is published even in auto_auth mode
+            reply = await asyncio.wait_for(self.read_reply(), timeout=self.read_timeout)
+            s = re.search(
+                r"AUTH\s+(?P<AUTH>\S+)\s+(?P<read_level>\d+)\s+(?P<write_level>\d+)",
+                reply,
+            )
+            if not s or s.group("AUTH") != "OK":
+                await self.disconnect()
+                raise RuntimeError("Not authorized")
 
-                if "TPL" not in read_bytes.decode().rstrip():
-                    raise RuntimeError("No welcome message from controller.")
-
-                self.log.debug(
-                    f"connected: {read_bytes.decode().rstrip()} : Starting authentication"
-                )
-
-                if not self.config.auto_auth:
-                    auth_str = (
-                        f"AUTH PLAIN {self.config.user} {self.config.password}\r\n"
-                    )
-
-                    # Write authentication
-                    self.writer.write(auth_str.encode())
-                    await self.writer.drain()
-
-                # Get reply from auth. This is published even in auto_auth mode
-
-                read_bytes = await asyncio.wait_for(
-                    self.reader.readuntil("\n".encode()), timeout=self.read_timeout
-                )
-
-                s = re.search(
-                    r"AUTH\s+(?P<AUTH>\S+)\s+(?P<read_level>\d+)\s+(?P<write_level>\d+)\n",
-                    read_bytes.decode(),
-                )
-
-                if not s or s.group("AUTH") != "OK":
-                    await self.disconnect()
-                    raise RuntimeError("Not authorized.")
-
-                self.read_level = int(s.group("read_level"))
-                self.write_level = int(s.group("write_level"))
+            self.read_level = int(s.group("read_level"))
+            self.write_level = int(s.group("write_level"))
 
             # Start loop to monitor replied.
-            self.log.debug("Start controller reply handler.")
-            self.reply_handler_loop = asyncio.create_task(self.reply_hander())
+            self.reply_loop_task = asyncio.create_task(self.reply_loop())
 
             if self.simulate:
                 # In the long run this may need to be called at regular
@@ -375,12 +391,10 @@ properties:
                 await self.report_good_mock_weather()
 
             # Start status loop
-            self.log.debug("Start status loop.")
-            self.run_status_loop = True
-            self.status_loop_future = asyncio.create_task(self.status_loop())
+            self.status_loop_task = asyncio.create_task(self.status_loop())
 
         except Exception:
-            self.log.exception("Error connecting to DIMM controller.")
+            self.log.exception("Error connecting to DIMM controller")
             self.status["status"] = DIMMStatus["ERROR"]
         else:
             self.status["status"] = DIMMStatus["INITIALIZED"]
@@ -388,30 +402,15 @@ properties:
     async def disconnect(self):
         """Disconnect from the spectrograph controller's TCP/IP port."""
 
-        try:
-            if self.reply_handler_loop:
-                self.reply_handler_loop.cancel()
-                await self.reply_handler_loop
-        except asyncio.CancelledError:
-            self.log.info("Reply handler task cancelled...")
-        except Exception as e:
-            # Something else may have happened. I still want to disable as this
-            # will stop the loop on the target production
-            self.log.exception(e)
-        finally:
-            self.reply_handler_loop = None
-
-        self.log.debug("disconnect")
-
+        self.log.debug("Disconnect")
+        self.reply_loop_task.cancel()
+        self.status_loop_task.cancel()
+        await self.write_cmdstr("DISCONNECT")
         writer = self.writer
         self.reader = None
         self.writer = None
-        if writer:
-            try:
-                writer.write_eof()
-                await asyncio.wait_for(writer.drain(), timeout=2)
-            finally:
-                writer.close()
+        if writer is not None:
+            await close_stream_writer(writer)
 
     async def get_measurement(self):
         """Wait and return new seeing measurements.
@@ -425,238 +424,257 @@ properties:
 
         prev_timestamp = 0.0
         try:
-            timestamp_cmd = AstelcoCommand("GET", "DIMM.TIMESTAMP")
-            self.cmd_list[timestamp_cmd.id] = timestamp_cmd
-            await self.run_command(timestamp_cmd.id)
-            await timestamp_cmd.cmd_complete_evt.wait()
-            timestamp = float(timestamp_cmd.data[0])
+            timestamp_cmd = await self.run_command("GET", "DIMM.TIMESTAMP")
+            timestamp = timestamp_cmd.get_float("DIMM.TIMESTAMP")
             if timestamp == prev_timestamp:
                 return None
             prev_timestamp = timestamp
 
-            seeing = AstelcoCommand("GET", "DIMM.SEEING")
-            flux_left = AstelcoCommand("GET", "DIMM.FLUX_LEFT")
-            flux_right = AstelcoCommand("GET", "DIMM.FLUX_RIGHT")
-            airmass = AstelcoCommand("GET", "DIMM.AIRMASS")
-            self.cmd_list[seeing.id] = seeing
-            self.cmd_list[flux_left.id] = flux_left
-            self.cmd_list[flux_right.id] = flux_right
-            self.cmd_list[airmass.id] = airmass
-            await asyncio.gather(
-                self.run_command(seeing.id),
-                self.run_command(flux_left.id),
-                self.run_command(flux_right.id),
-                self.run_command(airmass.id),
-                seeing.cmd_complete_evt.wait(),
-                flux_left.cmd_complete_evt.wait(),
-                flux_right.cmd_complete_evt.wait(),
-                airmass.cmd_complete_evt.wait(),
+            seeing_cmd = await self.run_command(
+                "GET",
+                "DIMM.SEEING;DIMM.AIRMASS;"
+                "DIMM.FLUX_LEFT;DIMM.FLUX_RIGHT;"
+                "DIMM.STREHL_LEFT;DIMM.STREHL_RIGHT",
             )
 
             # seeing_lowfreq = AstelcoCommand("GET", "DIMM.SEEING_LOWFREQ")
             # flux_rms_left = AstelcoCommand("GET", "DIMM.FLUX_RMS_LEFT")
             # flux_rms_right = AstelcoCommand("GET", "DIMM.FLUX_RMS_RIGHT")
-            # strehl_left = AstelcoCommand("GET", "DIMM.STREHL_LEFT")
-            # strehl_right = AstelcoCommand("GET", "DIMM.STREHL_RIGHT")
             measurement = dict()
 
             measurement["hrNum"] = 0
             measurement["timestamp"] = timestamp
-            measurement["secz"] = airmass.data[0]
+            measurement["secz"] = seeing_cmd.get_float("DIMM.AIRMASS")
             measurement["fwhmx"] = -1
             measurement["fwhmy"] = -1
-            measurement["fwhm"] = seeing.data[0]
+            measurement["fwhm"] = seeing_cmd.get_float("DIMM.SEEING")
             measurement["r0"] = -1
             measurement["nimg"] = 1
             measurement["dx"] = 0.0
             measurement["dy"] = 0.0
-            measurement["fluxL"] = flux_left.data[0]
+            measurement["fluxL"] = seeing_cmd.get_float("DIMM.FLUX_LEFT")
             measurement["scintL"] = 0
-            measurement["strehlL"] = 0
-            measurement["fluxR"] = flux_right.data[0]
+            measurement["strehlL"] = seeing_cmd.get_float("DIMM.STREHL_LEFT")
+            measurement["fluxR"] = seeing_cmd.get_float("DIMM.FLUX_RIGHT")
             measurement["scintR"] = 0
-            measurement["strehlR"] = 0
+            measurement["strehlR"] = seeing_cmd.get_float("DIMM.STREHL_RIGHT")
             measurement["flux"] = 0.0
-            # await self.dimm_seeing.cmd_complete_evt.wait()
             return measurement
         except Exception:
-            self.log.exception("Error in get measurement.")
+            self.log.exception("Error in get measurement")
 
-    async def new_measurement(self):
-        """Generate a new measurement by querying DIMM controller
-        information.
-
-        Returns
-        -------
-        measurement : dict
-            A dictionary with the same values of the dimmMeasurement topic SAL
-            Event.
-        """
-
-        measurement = dict()
-
-        measurement["hrNum"] = 0
-        measurement["timestamp"] = self.measurement_start
-
-        # altitude = AstelcoCommand("GET", "SCOPE.ALT")
-        # self.cmd_list[altitude.id] = altitude
-        # await self.run_command(altitude.id)
-        # measurement['secz'] = 1./np.cos(np.radians(90.-altitude.data[0]))
-        measurement["secz"] = 1.0
-
-        measurement["fwhmx"] = -1
-        measurement["fwhmy"] = -1
-
-        # seeing = AstelcoCommand("GET", "DIMM.SEEING")
-        # await self.run_command(seeing)
-
-        measurement["fwhm"] = self.dimm_seeing.data
-        self.dimm_seeing.cmd_complete_evt.clear()
-        measurement["r0"] = -1
-        measurement["nimg"] = 1
-        measurement["dx"] = 0.0
-        measurement["dy"] = 0.0
-        measurement["fluxL"] = 0.0
-        measurement["scintL"] = 0
-        measurement["strehlL"] = 0
-        measurement["fluxR"] = 0
-        measurement["scintR"] = 0
-        measurement["strehlR"] = 0
-        measurement["flux"] = 0.0
-
-        return measurement
-
-    async def run_command(self, cmdid, want_connection=False):
+    async def run_command(self, name, arg, wait_done=True):
         """Send a command to the TCP/IP controller and process its replies.
 
         Parameters
         ----------
-        cmdid : `int`
-            The id of the command to run. Command must be added to internal
-            list or it will raise an exception.
-        want_connection : bool
-            Flag to specify if a connection is to be requested in case it is
-            not connected.
+        name : `str`
+            Command name, e.g. "SET" or "GET"
+        arg : `str`
+            Command argument.
+        wait_done : `bool`, optional
+            If True (the default), wait until the command is done.
         """
+        if not self.connected:
+            raise RuntimeError("Not connected")
+        command = AstelcoCommand(name=name, arg=arg)
+        self.running_commands[command.id] = command
+        await self.write_cmdstr(command.format())
+        if wait_done:
+            await command.done_task
+        return command
 
-        self.log.debug(f"run_command: {self.cmd_list[cmdid].encode()}")
+    async def write_cmdstr(self, cmdstr):
+        """Write a command string to the T2SA, after adding a terminator.
 
-        async with self.cmd_lock:
-            if not self.connected:
-                if (
-                    want_connection
-                    and self.connect_task is not None
-                    and not self.connect_task.done()
-                ):
-                    await self.connect_task
+        Parameters
+        ----------
+        cmdstr : `str`
+            The message to write, as a string with no terminator.
+        """
+        if not self.connected:
+            raise RuntimeError("Not connected")
+        cmdbytes = cmdstr.encode() + TERMINATOR
+        self.log.debug(f"Write to T2SA: {cmdbytes}")
+        self.writer.write(cmdbytes)
+        await self.writer.drain()
+
+    async def read_reply(self):
+        """Read a reply from the T2SA.
+
+        Return the reply after decoding and stripping surrounding whitespace
+        and terminators.
+        """
+        if not self.connected:
+            raise RuntimeError("Not connected")
+
+        reply_bytes = await self.reader.readuntil(TERMINATOR)
+        self.log.debug(f"Read from T2SA: {reply_bytes}")
+        return reply_bytes.decode().strip()
+
+    async def reply_loop(self):
+        """Handle reply from controller."""
+        self.log.debug("Reply loop begins")
+        try:
+            while self.connected:
+                reply = await self.read_reply()
+                for regex, handler in self.dispatcher_dict.items():
+                    match = regex.match(reply)
+                    if match is not None:
+                        kwargs = match.groupdict(default="")
+                        cmdid = int(kwargs.pop("cmdid"))
+                        command = self.running_commands.get(cmdid)
+                        if command is not None:
+                            command.replies.append(reply)
+                        try:
+                            handler(command=command, cmdid=cmdid, **kwargs)
+                        except Exception:
+                            self.log.exception(
+                                f"Reply handler {handler} failed on {reply!r}"
+                            )
+                        break
                 else:
-                    raise RuntimeError("Not connected and not trying to connect")
-            elif cmdid not in self.cmd_list:
-                raise RuntimeError(f"Command {cmdid} not in command list.")
-            elif self.cmd_list[cmdid].run:
-                raise RuntimeError(f"Command {cmdid} was already sent.")
+                    self.log.warning(f"Ignoring unrecognized reply {reply!r}")
 
-            self.writer.write(self.cmd_list[cmdid].encode())
-            self.cmd_list[cmdid].run = True
-            await self.writer.drain()
+        except asyncio.CancelledError:
+            pass
+        except (asyncio.IncompleteReadError, ConnectionResetError):
+            self.log.warning("Connection lost; reply loop ending")
+        except Exception:
+            self.log.exception("Reply loop failed")
+        finally:
+            self.log.debug(f"Terminate {len(self.running_commands)} pending commands")
+            # Cancel all running commands.
+            while self.running_commands:
+                command = self.running_commands.popitem()[1]
+                if not command.done_task.done():
+                    command.done_task.set_exception(asyncio.CancelledError())
+            self.log.debug("Reply loop done")
 
-    async def reply_hander(self):
-        """Handle reply from controller. It will parse the responses and
-        signals received from the controller and fill in the appropriate
-        information.
+    def handle_command(self, command, cmdid, state, message=""):
+        """Handle a COMMAND {state} reply.
+
+        If state is COMPLETE: set command.done_task result to None.
+        If state is FAILED: set command.done_task exception to CommandError.
+        Otherwise ignore the message because the other states are not
+        terminal, and all replies are accumulated in command.replies,
+        in case you want the information.
+
+        Parameters
+        ----------
+        command : `AstelcoCommand`
+            The command. Must not be None.
+        cmdid : `int`
+            The command ID.
+        state : `str`
+            The command state, e.g. FAILED or COMPLETE.
+        message : `str`, optional
+            Additional information. Used to set
         """
+        assert_command_not_none(cmdid=cmdid, command=command)
+        match state:
+            case "FAILED":
+                if not command.done_task.done():
+                    command.done_task.set_exception(CommandError(message))
+                else:
+                    self.log.warning(
+                        f"Cannot set {command} to error; it already finished"
+                    )
+            case "COMPLETE":
+                if not command.done_task.done():
+                    command.done_task.set_result(None)
+                else:
+                    self.log.warning(
+                        f"Cannot set {command} to error; it already finished"
+                    )
 
-        while self.run_status_loop:
-            try:
-                self.log.debug("Wait for data")
-                read_bytes = await asyncio.wait_for(
-                    self.reader.readuntil("\n".encode()), timeout=None
-                )
-                self.log.debug(read_bytes)
-                for exp in self._expect:
+    def handle_data_error(self, command, cmdid, name, error):
+        """Handle a DATA ERROR reply.
 
-                    try:
-                        re_exp = re.search(exp, read_bytes.decode().strip())
-                    except Exception as e:
-                        self.log.exception(e)
-                        continue
+        DATA ERROR indicates that a SET or GET command failed for this
+        variable, so set command.data[name] = (False, error)
 
-                    if re_exp is not None:
+        Parameters
+        ----------
+        command : `AstelcoCommand`
+            The command. Must not be None.
+        cmdid : `int`
+            The command ID.
+        name : `str`
+            The specified variable name.
+        error : `str`
+            Error information.
+        """
+        assert_command_not_none(cmdid=cmdid, command=command)
+        command.data[name] = (False, error)
 
-                        cmdid = int(re_exp.group("CMDID"))
+    def handle_data_inline(self, command, cmdid, name, value):
+        """Handle a DATA INLINE reply.
 
-                        # cmdid == 0 are for events
+        DATA INLINE returns the successful result of a GET command
+        for one variable.
 
-                        if cmdid in self.cmd_list:
-                            self.cmd_list[cmdid].received.append(re_exp)
-                            try:
-                                if "DATA INLINE" in read_bytes.decode():
-                                    if "!TYPE" in read_bytes.decode():
-                                        self.cmd_list[cmdid].dtype = _CmdType[
-                                            re_exp.group("VALUE")
-                                        ]
-                                    else:
-                                        self.cmd_list[cmdid].data.append(
-                                            self.cmd_list[cmdid].dtype(
-                                                re_exp.group("VALUE").replace('"', "")
-                                            )
-                                        )
-                                    break
-                                elif "COMMAND" in read_bytes.decode():
-                                    self.cmd_list[cmdid].status = re_exp.group("STATUS")
-                                    self.cmd_list[cmdid].allstatus.append(
-                                        re_exp.group("STATUS")
-                                    )
-                                    if self.cmd_list[cmdid].status == "OK":
-                                        self.cmd_list[cmdid].ok = True
-                                    elif self.cmd_list[cmdid].status == "COMPLETE":
-                                        self.cmd_list[cmdid].complete = True
-                                        self.cmd_list[cmdid].complete_time = time.time()
-                                        self.cmd_list[cmdid].cmd_complete_evt.set()
-                                    break
-                                elif "EVENT ERROR" in read_bytes.decode():
-                                    self.cmd_list[cmdid].events.append(
-                                        re_exp.group("ENCM")
-                                    )
-                                    break
-                            except Exception:
-                                self.cmd_list[cmdid].ok = False
-                                self.cmd_list[cmdid].complete = True
-                                self.cmd_list[cmdid].complete_time = time.time()
-                                self.cmd_list[cmdid].cmd_complete_evt.set()
-                                self.log.exception(
-                                    "Error parsing command: "
-                                    f"{read_bytes.decode().rstrip()}"
-                                )
-                        elif re_exp.group("OBJECT") == "DIMM.SEEING":
-                            self.dimm_seeing.data = np.float(
-                                re_exp.group("VALUE").split()[0]
-                            )
-                            self.dimm_seeing.complete_time = time.time()
-                            self.dimm_seeing.cmd_complete_evt.set()
-                            break
-                        elif re_exp.group("OBJECT") == "DIMM.SEEING_LOWFREQ":
-                            self.dimm_seeing_lowfreq.data = np.float(
-                                re_exp.group("VALUE").split()[0]
-                            )
-                            self.dimm_seeing_lowfreq.complete_time = time.time()
-                            self.dimm_seeing_lowfreq.cmd_complete_evt.set()
-                            break
-            except asyncio.IncompleteReadError as e:
-                self.log.debug(f"Incomplete read error... Got {len(e.partial)}...")
-                if len(e.partial) > 0:
-                    self.log.debug(e.partial)
-            except Exception as e:
-                self.log.exception(e)
-            finally:
-                self.log.debug("Cleaning up")
-                # Clean up old commands
-                if len(self.cmd_list) > self.cmd_max_size:
-                    for i in range(len(self.cmd_list) - self.cmd_max_size):
-                        del_cmdid = next(iter(self.cmd_list))
-                        self.log.debug(f"Deleting {del_cmdid}")
-                        del self.cmd_list[del_cmdid]
-                self.log.debug("Cleaning done")
+        Set command.data[name] = (True, stripped_value), where stripped_value
+        is value enclosing double quotes stripped, if present.
+        Note that the value stored in command.data is always a string,
+        because this callback has no type information.
+
+        Parameters
+        ----------
+        command : `AstelcoCommand`
+            The command. Must not be None.
+        cmdid : `int`
+            The command ID.
+        name : `str`
+            The specified variable name.
+        value : `str`
+            The value, as a string.
+        """
+        assert_command_not_none(cmdid=cmdid, command=command)
+        if value[0] == '"':
+            # Trim double quotes from a string value
+            value = value[1:-1]
+        command.data[name] = (True, value)
+
+    def handle_data_ok(self, command, cmdid, name):
+        """Handle an DATA OK reply.
+
+        DATA OK indicates that a SET command succeeded for this variable,
+        so set command.data[name] = (True, "").
+
+        Parameters
+        ----------
+        command : `AstelcoCommand`
+            The command. Must not be None.
+        cmdid : `int`
+            The command ID.
+        name : `str`
+            The specified variable name.
+        """
+        assert_command_not_none(cmdid=cmdid, command=command)
+        command.data[name] = (True, "")
+
+    def handle_event(self, command, cmdid, event_type, name, number, description=""):
+        """Handle an EVENT reply.
+
+        We aren't relying on events, so just log it for now.
+
+        Parameters
+        ----------
+        command : `AstelcoCommand` or None
+            The command, if cmdid is not 0 and the command is running.
+        cmdid : `int`
+            The command ID; 0 for unsolicited replies.
+        event_type : `str`
+            The event type.
+        name : `str`
+            The specified variable name.
+        number : `str`
+            The specified number, as a string.
+        description : `str`, optional
+            More information.
+        """
+        self.log.info(f"Read event {event_type} {name}={number} {description}")
 
     @property
     def connected(self):
@@ -673,17 +691,12 @@ properties:
         due to safety issues.
         """
 
-        cmd = AstelcoCommand("SET", f"WEATHER.TEMP_AMB={data.ambient_temp}")
-        self.cmd_list[cmd.id] = cmd
-        await self.run_command(cmd.id)
-
-        cmd = AstelcoCommand("SET", f"WEATHER.RH={data.humidity}")
-        self.cmd_list[cmd.id] = cmd
-        await self.run_command(cmd.id)
-
-        cmd = AstelcoCommand("SET", f"WEATHER.PRESSURE={data.pressure}")
-        self.cmd_list[cmd.id] = cmd
-        await self.run_command(cmd.id)
+        await self.run_command(
+            "SET",
+            f"WEATHER.TEMP_AMB={data.ambient_temp};"
+            f"WEATHER.RH={data.humidity};"
+            f"WEATHER.PRESSURE={data.pressure}",
+        )
 
     async def wind_speed_callback(self, data):
         """Sends information about wind speed (m/s) to the DIMM.
@@ -694,76 +707,61 @@ properties:
         DIMM to shut-off if to many cycles are lost.
         """
         if data.avg2M > 0.0:
-            cmd = AstelcoCommand("SET", f"WEATHER.WIND={data.avg2M}")
-            self.cmd_list[cmd.id] = cmd
-            await self.run_command(cmd.id)
+            await self.run_command("SET", f"WEATHER.WIND={data.avg2M}")
         elif data.value >= 0.0:
-            cmd = AstelcoCommand("SET", f"WEATHER.WIND={data.value}")
-            self.cmd_list[cmd.id] = cmd
-            await self.run_command(cmd.id)
+            await self.run_command("SET", f"WEATHER.WIND={data.value}")
 
     async def wind_direction_callback(self, data):
-        """Sends information about wind direction (degrees, clockwise from
-         due north) to the DIMM.
+        """Send wind direction to the DIMM.
 
-        Uses 2 minutes average information from weather station if average
-        contains a valid values (>0), otherwise sends instantaneous if valid
-        and don't update if none are valid. Note that this may cause the
-        DIMM to shut-off if to many cycles are lost.
+        The weather station and DIMM use the same convention
+        for wind direction: clockwise from due north.
+
+        Use 2 minutes average from weather station if valid,
+        else instantaneous, if valid, else don't send anything.
         """
         if data.avg2M > 0.0:
-            cmd = AstelcoCommand("SET", f"WEATHER.WIND_DIR={data.avg2M}")
-            self.cmd_list[cmd.id] = cmd
-            await self.run_command(cmd.id)
+            await self.run_command("SET", f"WEATHER.WIND_DIR={data.avg2M}")
         elif data.value >= 0.0:
-            cmd = AstelcoCommand("SET", f"WEATHER.WIND_DIR={data.value}")
-            self.cmd_list[cmd.id] = cmd
-            await self.run_command(cmd.id)
+            await self.run_command("SET", f"WEATHER.WIND_DIR={data.value}")
 
     async def dew_point_callback(self, data):
-        """Sends information about dew point (C) to the DIMM.
+        """Send dew point (C) to the DIMM.
 
-        Uses 1 minute average information from weather station if average
-        contains a valid values (>0), otherwise don't update it. Note that
-        this may cause the DIMM to shut-off if to many cycles are lost.
+        Use 1 minute average from weather station, if valid,
+        else don't send anything.
         """
         if data.avg1M > -99.0:
-            cmd = AstelcoCommand("SET", f"WEATHER.TEMP_DEW={data.avg1M}")
-            self.cmd_list[cmd.id] = cmd
-            await self.run_command(cmd.id)
+            await self.run_command("SET", f"WEATHER.TEMP_DEW={data.avg1M}")
 
     async def precipitation_callback(self, data):
-        """Sends information about rain to the DIMM.
-
-        0 = no precipitation
-        1 = rain/snow
-        """
+        """Set self.is_raining and update DIMM WEATHER.RAIN"""
         if data.prSum1M > -99.0:
-            self.rain_value = data.prSum1M > 0.0
-            rain_value = int(self.rain_value or self.snow_value)
-            cmd = AstelcoCommand("SET", f"WEATHER.RAIN={rain_value}")
-            self.cmd_list[cmd.id] = cmd
-            await self.run_command(cmd.id)
+            self.is_raining = data.prSum1M > 0.0
+        await self.set_weather_rain()
 
     async def snow_depth_callback(self, data):
-        """Sends information about snow to the DIMM.
-
-        0 = no precipitation
-        1 = rain/snow
-        """
+        """Set self.is_snowing and update DIMM WEATHER.RAIN"""
         if data.avg1M > -99.0:
-            self.snow_value = data.avg1M > 0.0
-            snow_value = int(self.snow_value or self.rain_value)
-            cmd = AstelcoCommand("SET", f"WEATHER.RAIN={snow_value}")
-            self.cmd_list[cmd.id] = cmd
-            await self.run_command(cmd.id)
+            self.is_snowing = data.avg1M > 0.0
+        await self.set_weather_rain()
+
+    async def set_weather_rain(self):
+        """Set DIMM WEATHER.RAIN based on self.is_raining
+        and self.is_snowing.
+        """
+        is_precipitating = self.is_raining or self.is_snowing
+        rain_value = RainState.PRECIPITATION if is_precipitating else RainState.DRY
+        await self.run_command("SET", f"WEATHER.RAIN={rain_value}")
 
     async def report_good_mock_weather(self):
         """Call the weather callbacks with data that allows auto operation.
 
-        Call the fewest callbacks required. This will only do the job
-        if none of the other weather callbacks has been called with
-        weather data that prevents automatic operation.
+        This can only be used if simulating.
+
+        It calls the fewest callbacks required, so it will only enable
+        operation if none of the other weather callbacks has been called
+        with weather data that prevents automatic operation.
 
         Raises
         ------
@@ -771,7 +769,7 @@ properties:
             If not simulating.
         """
         if not self.simulate:
-            raise RuntimeError("Only allowed in simulation mode.")
+            raise RuntimeError("Only allowed in simulation mode")
 
         await self.weather_callback(
             self.ws_remote.tel_weather.DataType(
