@@ -3,8 +3,30 @@
 ===============
 Version History
 ===============
+
+v0.8.0
+------
+
+* Add a ``simulate`` constructor argument to `BaseDIMM` and subclasses.
+* Add `MockAstelcoDIMM`
+* `AstelcoDIMM`:
+
+  * Manage a `MockAstelcoDIMM` in simulation mode.
+  * Overhaul command execution and reply parsing.
+  * Do not return a measurement until a new one has been taken.
+
+* Modernize the documentation and include Astelco communication manuals.
+
+Requires:
+
+* ts_salobj 7
+* ts_idl 3.2
+* ts_tcpip
+* IDL file for DIMM from ts_xml 12
+
 v0.7.0
 ------
+
 * Switch to pyproject.toml.
 
 Requires:
@@ -14,12 +36,19 @@ Requires:
 * IDL file for DIMM from ts_xml 12
 
 v0.6.1
+------
 
 * Add stubs for new commands
 
 v0.6.0
 ------
 * Prepare for salobj 7.
+
+Requires:
+
+* ts_salobj 7
+* ts_idl 3.2
+* IDL file for DIMM from ts_xml 11
 
 Requires:
 
