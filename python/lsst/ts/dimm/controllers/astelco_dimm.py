@@ -86,6 +86,7 @@ class AstelcoCommand:
         # where isok is a bool and value is a string that is one of:
         #
         # * The variable's value, as a str, for a get command of a variable.
+        #   The value may be NULL if unknown.
         # * The variable's property, as a str representation of an int,
         #   for a get command of a property. Note that the variable name
         #   will end with "!{property_name}", just like in the get command.
@@ -96,9 +97,22 @@ class AstelcoCommand:
         return f"{self.id} {self.name} {self.arg}"
 
     def get_value(self, name, dtype, bad_value=None):
-        """Get a variable's value."""
+        """Get a variable's value.
+
+        Parameters
+        ----------
+        name : `str`
+            Name of variable to get. Case-blind.
+        dtype : `type`
+            Type of data expected.
+        bad_value : `typing.Any`
+            The value to return if the get command fails,
+            or if the value is unknown (NULL for non-str variables).
+        """
         isok, strvalue = self.data[name]
         if not isok:
+            return bad_value
+        if strvalue == "NULL" and not issubclass(dtype, str):
             return bad_value
         return dtype(strvalue)
 
