@@ -322,7 +322,9 @@ properties:
                     "AMEBA.MODE;SCOPE.RA;SCOPE.DEC;SCOPE.ALT;SCOPE.AZ",
                 )
 
-                ameba_mode = status_cmd.get_int("AMEBA.MODE")
+                # AMEBA.MODE is supposed to be an integer, but the only values
+                # we have seen are "0" and "LOCKEDBY 21474836481"
+                ameba_mode = status_cmd.get_value("AMEBA.MODE", dtype=str, bad_value="")
                 self.status["ra"] = status_cmd.get_float("SCOPE.RA")
                 self.status["dec"] = status_cmd.get_float("SCOPE.DEC")
                 self.status["altitude"] = status_cmd.get_float("SCOPE.ALT")
@@ -330,7 +332,7 @@ properties:
 
                 self.log.debug(f"AMEBA.MODE = {ameba_mode}")
                 # "0" means off, "1" means auto and "2" means manual.
-                if ameba_mode != 0:
+                if ameba_mode != "0":
                     self.status["status"] = DIMMStatus["RUNNING"]
 
             await asyncio.sleep(1.0)
