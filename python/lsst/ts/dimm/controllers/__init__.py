@@ -22,3 +22,5 @@
 from .sim_dimm import *
 from .soar_dimm import *
 from .astelco_dimm import *
+from . import astelco_enums
+from .mock_astelco_dimm import *

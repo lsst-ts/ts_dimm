@@ -41,7 +41,7 @@ class BaseDIMM(abc.ABC):
     to setup and operate the DIMM.
     """
 
-    def __init__(self, log):
+    def __init__(self, log, simulate):
         self.status = {
             "status": DIMMStatus["NOTSET"],
             "ra": 0.0,
@@ -50,7 +50,8 @@ class BaseDIMM(abc.ABC):
             "azimuth": 0.0,
             "hrnum": 0,
         }
-        self.log = log
+        self.log = log.getChild(type(self).__name__)
+        self.simulate = simulate
 
     async def setup(self, config):
         """Base DIMM setup method.
@@ -77,19 +78,19 @@ class BaseDIMM(abc.ABC):
         raise NotImplementedError()
 
     async def unset(self):
-        """Unset SimDim."""
+        """Set DIMM status to NOTSET."""
         self.status["status"] = DIMMStatus["NOTSET"]
 
     async def start(self):
-        """Start DIMM."""
+        """Start the DIMM."""
         self.status["status"] = DIMMStatus["RUNNING"]
 
     async def stop(self):
-        """Stop DIMM."""
+        """Stop the DIMM."""
         self.status["status"] = DIMMStatus["INITIALIZED"]
 
     async def get_status(self):
-        """Returns status of the DIMM.
+        """Return status of the DIMM.
 
         Returns
         -------
@@ -101,12 +102,12 @@ class BaseDIMM(abc.ABC):
 
     @abc.abstractmethod
     async def get_measurement(self):
-        """Coroutine to wait and return new seeing measurements.
+        """Return a new seeing measurement.
 
         Returns
         -------
-        measurement : dict
+        measurement : `dict` | `None`
             A dictionary with the same values of the dimmMeasurement topic SAL
-            Event.
+            Event. None if no new measurement is available yet.
         """
         raise NotImplementedError()
