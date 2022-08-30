@@ -7,38 +7,44 @@ source:
   path: ../
 
 build:
-  script: python -m pip install --no-deps --ignore-installed .
+  script: {{ PYTHON }} -m pip install --no-deps --ignore-installed .
   noarch: generic
   entry_points:
     - run_dimm_csc = lsst.ts.dimm.dimm_csc:run_dimm_csc
 
 test:
   requires:
-    - ts-conda-build
     - sqlalchemy
+    - ts-conda-build =0.3
     - ts-dds
     - ts-idl {{ idl_version }}
     - ts-salobj {{ salobj_version }}
+    - ts-tcpip
   source_files:
-    - python
     - bin
-    - tests
-    - setup.cfg
     - pyproject.toml
+    - python
+    - setup.cfg
+    - tests
   commands:
     - py.test
 
 requirements:
   host:
-    - python
     - pip
-    - setuptools_scm
+    - python {{ python }}
     - setuptools
-    - pytest-runner
+    - setuptools_scm
+  build:
+    - python {{ python }}
+    - setuptools
+    - setuptools_scm
+    - ts-conda-build =0.3
   run:
-    - python
+    - python {{ python }}
     - setuptools
     - setuptools_scm
-    - ts-salobj
-    - ts-idl
     - sqlalchemy
+    - ts-idl
+    - ts-salobj
+    - ts-tcpip

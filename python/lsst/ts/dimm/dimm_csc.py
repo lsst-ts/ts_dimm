@@ -159,7 +159,10 @@ class DIMMCSC(salobj.ConfigurableCsc):
             )
 
         settings = types.SimpleNamespace(**instance)
-        self.controller = available_controllers[settings.controller](self.log)
+        controller_class = available_controllers[settings.controller]
+        self.controller = controller_class(
+            log=self.log, simulate=self.simulation_mode != 0
+        )
         # TODO DM-33985 Improve the way the WeatherStation remote is
         #  initialized in the controller.
         if settings.controller == "astelco":
@@ -329,6 +332,8 @@ class DIMMCSC(salobj.ConfigurableCsc):
                     break
 
                 await asyncio.sleep(self.heartbeat_interval)
+        except asyncio.CancelledError:
+            pass
         except Exception:
             self.log.exception("Error in telemetry loop.")
             await self.fault(
