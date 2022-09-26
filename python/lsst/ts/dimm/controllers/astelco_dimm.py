@@ -35,6 +35,9 @@ from .astelco_enums import TERMINATOR, RainState, SkyStatus
 from .base_dimm import BaseDIMM, DIMMStatus
 from .mock_astelco_dimm import MockAstelcoDIMM
 
+# Interval between status requests (seconds)
+STATUS_INTERVAL = 1.0
+
 # Words that indicate that data for a specific variable
 # could not be retrieved with a GET command.
 # Check that the first word of the reported value matches any of these,
@@ -176,15 +179,13 @@ class AstelcoDIMM(BaseDIMM):
 
         self.config = None
 
-        self.check_interval = 180.0
-
         self.connection_timeout = 10.0
         self.read_timeout = 10.0
 
         self.read_level = None
         self.write_level = None
 
-        self.connect_task = None
+        self.connect_task = make_done_future()
         self.reader = None
         self.writer = None
 
@@ -319,10 +320,9 @@ properties:
         self.ws_remote.tel_precipitation.callback = None
         self.ws_remote.tel_snowDepth.callback = None
 
-        self.status_loop_task.cancel()
-
         # TODO: Change to STOPPED?
         self.status["status"] = DIMMStatus["INITIALIZED"]
+        self.connect_task.cancel()
         await self.disconnect()
 
     async def status_loop(self):
@@ -350,7 +350,7 @@ properties:
                 if ameba_mode != "0":
                     self.status["status"] = DIMMStatus["RUNNING"]
 
-                await asyncio.sleep(1.0)
+                await asyncio.sleep(STATUS_INTERVAL)
         except asyncio.CancelledError:
             pass
         except Exception:
@@ -361,8 +361,10 @@ properties:
 
     async def connect(self):
         """Connect to the DIMM controller's TCP/IP."""
-        self.reply_loop_task.cancel()
         try:
+            self.reply_loop_task.cancel()
+            self.status_loop_task.cancel()
+
             if self.connected:
                 self.log.error("Already connected")
                 self.status["status"] = DIMMStatus["ERROR"]
@@ -436,7 +438,8 @@ properties:
         self.log.debug("Disconnect")
         self.reply_loop_task.cancel()
         self.status_loop_task.cancel()
-        await self.write_cmdstr("DISCONNECT")
+        if self.connected:
+            await self.write_cmdstr("DISCONNECT")
         writer = self.writer
         self.reader = None
         self.writer = None
