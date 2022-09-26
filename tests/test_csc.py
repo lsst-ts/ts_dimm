@@ -91,3 +91,6 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
             assert data.fwhm > 0.1
             assert data.fluxL > 1000
             assert data.fluxR > 1000
+            # Make sure most commands have been purged from running_commands;
+            # it may have a status command.
+            assert len(self.csc.controller.running_commands) <= 1

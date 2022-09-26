@@ -350,7 +350,7 @@ properties:
                 if ameba_mode != "0":
                     self.status["status"] = DIMMStatus["RUNNING"]
 
-            await asyncio.sleep(1.0)
+                await asyncio.sleep(1.0)
         except asyncio.CancelledError:
             pass
         except Exception:
@@ -563,6 +563,8 @@ properties:
                             self.log.exception(
                                 f"Reply handler {handler} failed on {reply!r}"
                             )
+                        if command.done_task.done():
+                            self.running_commands.pop(cmdid)
                         break
                 else:
                     self.log.warning(f"Ignoring unrecognized reply {reply!r}")
