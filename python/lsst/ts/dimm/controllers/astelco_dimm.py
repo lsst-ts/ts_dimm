@@ -35,6 +35,24 @@ from .astelco_enums import TERMINATOR, RainState, SkyStatus
 from .base_dimm import BaseDIMM, DIMMStatus
 from .mock_astelco_dimm import MockAstelcoDIMM
 
+# Interval between status requests (seconds)
+STATUS_INTERVAL = 1.0
+
+# Words that indicate that data for a specific variable
+# could not be retrieved with a GET command.
+# Check that the first word of the reported value matches any of these,
+# since FAILED and LOCKEDBY replies include additional information.
+BadDataReplies = {
+    "BUSY",
+    "DENIED",
+    "DIMENSION",
+    "FAILED",
+    "INVALID",
+    "LOCKEDBY",
+    "TYPE",
+    "UNKNOWN",
+}
+
 
 class CommandError(Exception):
     pass
@@ -107,14 +125,14 @@ class AstelcoCommand:
             Type of data expected.
         bad_value : `typing.Any`
             The value to return if the get command fails,
-            or if the value is unknown (NULL for non-str variables).
+            or if the value is unknown.
         """
-        isok, strvalue = self.data[name]
+        isok, strvalue_or_none = self.data[name]
         if not isok:
             return bad_value
-        if strvalue == "NULL" and not issubclass(dtype, str):
+        if strvalue_or_none is None:
             return bad_value
-        return dtype(strvalue)
+        return dtype(strvalue_or_none)
 
     def get_float(self, name):
         return self.get_value(name=name, dtype=float, bad_value=math.nan)
@@ -161,15 +179,13 @@ class AstelcoDIMM(BaseDIMM):
 
         self.config = None
 
-        self.check_interval = 180.0
-
         self.connection_timeout = 10.0
         self.read_timeout = 10.0
 
         self.read_level = None
         self.write_level = None
 
-        self.connect_task = None
+        self.connect_task = make_done_future()
         self.reader = None
         self.writer = None
 
@@ -304,10 +320,9 @@ properties:
         self.ws_remote.tel_precipitation.callback = None
         self.ws_remote.tel_snowDepth.callback = None
 
-        self.status_loop_task.cancel()
-
         # TODO: Change to STOPPED?
         self.status["status"] = DIMMStatus["INITIALIZED"]
+        self.connect_task.cancel()
         await self.disconnect()
 
     async def status_loop(self):
@@ -335,7 +350,7 @@ properties:
                 if ameba_mode != "0":
                     self.status["status"] = DIMMStatus["RUNNING"]
 
-            await asyncio.sleep(1.0)
+                await asyncio.sleep(STATUS_INTERVAL)
         except asyncio.CancelledError:
             pass
         except Exception:
@@ -346,8 +361,10 @@ properties:
 
     async def connect(self):
         """Connect to the DIMM controller's TCP/IP."""
-        self.reply_loop_task.cancel()
         try:
+            self.reply_loop_task.cancel()
+            self.status_loop_task.cancel()
+
             if self.connected:
                 self.log.error("Already connected")
                 self.status["status"] = DIMMStatus["ERROR"]
@@ -366,7 +383,7 @@ properties:
                 host = self.config.host
                 port = self.config.port
 
-            self.log.debug(f"Connecting to: {host}:{port}")
+            self.log.info(f"Connecting to Astelco DIMM at {host}:{port}")
             self.connect_task = asyncio.open_connection(host=host, port=port)
 
             self.reader, self.writer = await asyncio.wait_for(
@@ -421,7 +438,8 @@ properties:
         self.log.debug("Disconnect")
         self.reply_loop_task.cancel()
         self.status_loop_task.cancel()
-        await self.write_cmdstr("DISCONNECT")
+        if self.connected:
+            await self.write_cmdstr("DISCONNECT")
         writer = self.writer
         self.reader = None
         self.writer = None
@@ -548,6 +566,8 @@ properties:
                             self.log.exception(
                                 f"Reply handler {handler} failed on {reply!r}"
                             )
+                        if command.done_task.done():
+                            self.running_commands.pop(cmdid)
                         break
                 else:
                     self.log.warning(f"Ignoring unrecognized reply {reply!r}")
@@ -627,13 +647,23 @@ properties:
     def handle_data_inline(self, command, cmdid, name, value):
         """Handle a DATA INLINE reply.
 
-        DATA INLINE returns the successful result of a GET command
-        for one variable.
+        DATA INLINE handles the successful result of a GET command
+        for one variable, by setting command.data[name] as follows:
 
-        Set command.data[name] = (True, stripped_value), where stripped_value
-        is value enclosing double quotes stripped, if present.
-        Note that the value stored in command.data is always a string,
-        because this callback has no type information.
+        * ``(False, reply)`` if the data could not be retrieved,
+          where ``reply`` indicates what went wrong.
+          The OpenTPL manual section ``4.2. GET — Retrieving data``
+          has a table showing possible error replies.
+        * ``(True, None)`` if the value is unknown (reported as NULL).
+        * ``(True, strvalue)`` if the value is known.
+
+          Notes:
+
+          * ``strvalue`` will have surrounding double quotes stripped,
+            if present (as they will be for a string-valued variable).
+          * ``strvalue`` is always a string, because this callback doesn't know
+            the type of each variable. Use AstelcoCommand.get_float or
+            get_int to retrieve a value cast to a float or int.
 
         Parameters
         ----------
@@ -647,10 +677,19 @@ properties:
             The value, as a string.
         """
         assert_command_not_none(cmdid=cmdid, command=command)
-        if value[0] == '"':
-            # Trim double quotes from a string value
-            value = value[1:-1]
-        command.data[name] = (True, value)
+        first_word = value.split()[0]
+        if first_word in BadDataReplies:
+            self.log.warning(
+                f"GET {name} failed: {value!r}; treating the value as unknown"
+            )
+            command.data[name] = (False, value)
+        else:
+            if first_word == "NULL":
+                value = None
+            elif value[0] == '"':
+                # Trim double quotes from a string value
+                value = value[1:-1]
+            command.data[name] = (True, value)
 
     def handle_data_ok(self, command, cmdid, name):
         """Handle an DATA OK reply.

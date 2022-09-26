@@ -4,6 +4,28 @@
 Version History
 ===============
 
+v0.8.1
+------
+
+* `AstelcoDIMM`:
+
+    * Improve handling of invalid values returned by the GET command.
+    * ``status_loop`` was running far too often, needlessly stressing the DIMM.
+    * Fix a memory leak due to accumulation of `AstelcoCommand` instances in ``running_commands``
+      (a leak made far worse by ``status_loop`` running far too often).
+    
+* ``Jenkinsfile``:
+
+    * Pull in missing ts_tcpip package.
+    * Modernize the format.
+
+Requires:
+
+* ts_salobj 7
+* ts_idl 3.2
+* ts_tcpip
+* IDL file for DIMM from ts_xml 12
+
 v0.8.0
 ------
 
