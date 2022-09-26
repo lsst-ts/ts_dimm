@@ -381,7 +381,7 @@ properties:
                 host = self.config.host
                 port = self.config.port
 
-            self.log.debug(f"Connecting to: {host}:{port}")
+            self.log.info(f"Connecting to Astelco DIMM at {host}:{port}")
             self.connect_task = asyncio.open_connection(host=host, port=port)
 
             self.reader, self.writer = await asyncio.wait_for(
