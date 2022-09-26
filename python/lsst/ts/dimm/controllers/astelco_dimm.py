@@ -35,6 +35,21 @@ from .astelco_enums import TERMINATOR, RainState, SkyStatus
 from .base_dimm import BaseDIMM, DIMMStatus
 from .mock_astelco_dimm import MockAstelcoDIMM
 
+# Words that indicate that data for a specific variable
+# could not be retrieved with a GET command.
+# Check that the first word of the reported value matches any of these,
+# since FAILED and LOCKEDBY replies include additional information.
+BadDataReplies = {
+    "BUSY",
+    "DENIED",
+    "DIMENSION",
+    "FAILED",
+    "INVALID",
+    "LOCKEDBY",
+    "TYPE",
+    "UNKNOWN",
+}
+
 
 class CommandError(Exception):
     pass
@@ -107,14 +122,14 @@ class AstelcoCommand:
             Type of data expected.
         bad_value : `typing.Any`
             The value to return if the get command fails,
-            or if the value is unknown (NULL for non-str variables).
+            or if the value is unknown.
         """
-        isok, strvalue = self.data[name]
+        isok, strvalue_or_none = self.data[name]
         if not isok:
             return bad_value
-        if strvalue == "NULL" and not issubclass(dtype, str):
+        if strvalue_or_none is None:
             return bad_value
-        return dtype(strvalue)
+        return dtype(strvalue_or_none)
 
     def get_float(self, name):
         return self.get_value(name=name, dtype=float, bad_value=math.nan)
@@ -627,13 +642,23 @@ properties:
     def handle_data_inline(self, command, cmdid, name, value):
         """Handle a DATA INLINE reply.
 
-        DATA INLINE returns the successful result of a GET command
-        for one variable.
+        DATA INLINE handles the successful result of a GET command
+        for one variable, by setting command.data[name] as follows:
 
-        Set command.data[name] = (True, stripped_value), where stripped_value
-        is value enclosing double quotes stripped, if present.
-        Note that the value stored in command.data is always a string,
-        because this callback has no type information.
+        * ``(False, reply)`` if the data could not be retrieved,
+          where ``reply`` indicates what went wrong.
+          The OpenTPL manual section ``4.2. GET — Retrieving data``
+          has a table showing possible error replies.
+        * ``(True, None)`` if the value is unknown (reported as NULL).
+        * ``(True, strvalue)`` if the value is known.
+
+          Notes:
+
+          * ``strvalue`` will have surrounding double quotes stripped,
+            if present (as they will be for a string-valued variable).
+          * ``strvalue`` is always a string, because this callback doesn't know
+            the type of each variable. Use AstelcoCommand.get_float or
+            get_int to retrieve a value cast to a float or int.
 
         Parameters
         ----------
@@ -647,10 +672,19 @@ properties:
             The value, as a string.
         """
         assert_command_not_none(cmdid=cmdid, command=command)
-        if value[0] == '"':
-            # Trim double quotes from a string value
-            value = value[1:-1]
-        command.data[name] = (True, value)
+        first_word = value.split()[0]
+        if first_word in BadDataReplies:
+            self.log.warning(
+                f"GET {name} failed: {value!r}; treating the value as unknown"
+            )
+            command.data[name] = (False, value)
+        else:
+            if first_word == "NULL":
+                value = None
+            elif value[0] == '"':
+                # Trim double quotes from a string value
+                value = value[1:-1]
+            command.data[name] = (True, value)
 
     def handle_data_ok(self, command, cmdid, name):
         """Handle an DATA OK reply.
