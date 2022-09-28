@@ -322,7 +322,6 @@ properties:
 
         # TODO: Change to STOPPED?
         self.status["status"] = DIMMStatus["INITIALIZED"]
-        self.connect_task.cancel()
         await self.disconnect()
 
     async def status_loop(self):
@@ -560,15 +559,15 @@ properties:
                         command = self.running_commands.get(cmdid)
                         if command is not None:
                             command.replies.append(reply)
-                        try:
-                            handler(command=command, cmdid=cmdid, **kwargs)
-                        except Exception:
-                            self.log.exception(
-                                f"Reply handler {handler} failed on {reply!r}"
-                            )
-                        if command.done_task.done():
-                            self.running_commands.pop(cmdid)
-                        break
+                            try:
+                                handler(command=command, cmdid=cmdid, **kwargs)
+                            except Exception:
+                                self.log.exception(
+                                    f"Reply handler {handler} failed on {reply!r}"
+                                )
+                            if command.done_task.done():
+                                self.running_commands.pop(cmdid)
+                            break
                 else:
                     self.log.warning(f"Ignoring unrecognized reply {reply!r}")
 
