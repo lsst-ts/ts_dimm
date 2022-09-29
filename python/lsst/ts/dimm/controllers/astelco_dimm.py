@@ -333,14 +333,14 @@ properties:
             while self.connected:
                 status_cmd = await self.run_command(
                     "GET",
-                    "AMEBA.MODE;SCOPE.RA;SCOPE.DEC;SCOPE.ALT;SCOPE.AZ",
+                    "AMEBA.MODE;AMEBA.CURRENT.RA;AMEBA.CURRENT.DEC;SCOPE.ALT;SCOPE.AZ",
                 )
 
                 # AMEBA.MODE is supposed to be an integer, but the only values
                 # we have seen are "0" and "LOCKEDBY 21474836481"
                 ameba_mode = status_cmd.get_value("AMEBA.MODE", dtype=str, bad_value="")
-                self.status["ra"] = status_cmd.get_float("SCOPE.RA")
-                self.status["dec"] = status_cmd.get_float("SCOPE.DEC")
+                self.status["ra"] = status_cmd.get_float("AMEBA.CURRENT.RA")
+                self.status["dec"] = status_cmd.get_float("AMEBA.CURRENT.DEC")
                 self.status["altitude"] = status_cmd.get_float("SCOPE.ALT")
                 self.status["azimuth"] = status_cmd.get_float("SCOPE.AZ")
 
