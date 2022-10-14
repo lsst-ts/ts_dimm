@@ -4,6 +4,21 @@
 Version History
 ===============
 
+v0.8.2
+------
+
+* `AstelcoDIMM`:
+
+  * In ``status_loop`` only execute handler and check for command completion if command is not ``None``.
+  * Get Ra/Dec from the AMEBA module instead of the SCOPE module.
+
+Requires:
+
+* ts_salobj 7
+* ts_idl 3.2
+* ts_tcpip
+* IDL file for DIMM from ts_xml 12
+
 v0.8.1
 ------
 
