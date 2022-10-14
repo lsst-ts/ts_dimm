@@ -384,7 +384,9 @@ properties:
                 port = self.config.port
 
             self.log.info(f"Connecting to Astelco DIMM at {host}:{port}")
-            self.connect_task = asyncio.open_connection(host=host, port=port)
+            self.connect_task = asyncio.create_task(
+                asyncio.open_connection(host=host, port=port)
+            )
 
             self.reader, self.writer = await asyncio.wait_for(
                 self.connect_task, timeout=self.connection_timeout
@@ -560,15 +562,15 @@ properties:
                         command = self.running_commands.get(cmdid)
                         if command is not None:
                             command.replies.append(reply)
-                        try:
-                            handler(command=command, cmdid=cmdid, **kwargs)
-                        except Exception:
-                            self.log.exception(
-                                f"Reply handler {handler} failed on {reply!r}"
-                            )
-                        if command.done_task.done():
-                            self.running_commands.pop(cmdid)
-                        break
+                            try:
+                                handler(command=command, cmdid=cmdid, **kwargs)
+                            except Exception:
+                                self.log.exception(
+                                    f"Reply handler {handler} failed on {reply!r}"
+                                )
+                            if command.done_task.done():
+                                self.running_commands.pop(cmdid)
+                            break
                 else:
                     self.log.warning(f"Ignoring unrecognized reply {reply!r}")
 
