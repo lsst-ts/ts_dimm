@@ -19,8 +19,8 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+from . import astelco_enums
+from .astelco_dimm import *
+from .mock_astelco_dimm import *
 from .sim_dimm import *
 from .soar_dimm import *
-from .astelco_dimm import *
-from . import astelco_enums
-from .mock_astelco_dimm import *

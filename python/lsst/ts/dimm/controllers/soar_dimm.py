@@ -20,11 +20,11 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import asyncio
-import sqlalchemy
 import warnings
 
-from .base_dimm import BaseDIMM, DIMMStatus
+import sqlalchemy
 
+from .base_dimm import BaseDIMM, DIMMStatus
 
 __all__ = ["SOARDIMM"]
 

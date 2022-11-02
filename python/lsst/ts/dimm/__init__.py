@@ -24,6 +24,6 @@ try:
 except ModuleNotFoundError:
     __version__ = "?"
 
-from .controllers import *  # import all available controllers
 from .config_schema import CONFIG_SCHEMA
+from .controllers import *  # import all available controllers
 from .dimm_csc import *
