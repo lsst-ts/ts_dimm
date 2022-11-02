@@ -20,19 +20,20 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import asyncio
-import types
 import traceback
+import types
+
+from lsst.ts import salobj, utils
+from lsst.ts.dimm import controllers
 
 from . import __version__
 from .config_schema import CONFIG_SCHEMA
 from .controllers.base_dimm import DIMMStatus
 from .utils.conversion import (
+    convert_dimm_measurement_data,
     convert_to_float,
     convert_to_int,
-    convert_dimm_measurement_data,
 )
-from lsst.ts.dimm import controllers
-from lsst.ts import salobj
 
 __all__ = ["DIMMCSC", "run_dimm_csc"]
 
@@ -129,6 +130,7 @@ class DIMMCSC(salobj.ConfigurableCsc):
         self.seeing_loop_task = None
 
         self.csc_running = True
+        self.measurement_validity = None
         self.health_monitor_loop_task = asyncio.create_task(self.health_monitor())
 
     @staticmethod
@@ -163,6 +165,8 @@ class DIMMCSC(salobj.ConfigurableCsc):
         self.controller = controller_class(
             log=self.log, simulate=self.simulation_mode != 0
         )
+        self.measurement_validity = settings.measurement_validity
+
         # TODO DM-33985 Improve the way the WeatherStation remote is
         #  initialized in the controller.
         if settings.controller == "astelco":
@@ -364,6 +368,14 @@ class DIMMCSC(salobj.ConfigurableCsc):
                 # Only send telemetry if the controller is operational
                 if data is not None and self.controller_running:
                     converted_data = convert_dimm_measurement_data(data)
+                    # Add expiration information
+                    if hasattr(self.evt_dimmMeasurement.DataType(), "expiresAt"):
+                        converted_data["expiresAt"] = (
+                            utils.utc_from_tai_unix(utils.current_tai())
+                            + self.measurement_validity
+                        )
+                        converted_data["expiresIn"] = self.measurement_validity
+
                     await self.evt_dimmMeasurement.set_write(**converted_data)
                 await asyncio.sleep(self.heartbeat_interval)
             except ValueError:
