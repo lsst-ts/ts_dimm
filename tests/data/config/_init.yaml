@@ -2,6 +2,7 @@
 instances:
   - sal_index: 1
     controller: astelco
+    measurement_validity: 300.0
     config:
       avg_seeing: 0.5
       std_seeing: 0.1
