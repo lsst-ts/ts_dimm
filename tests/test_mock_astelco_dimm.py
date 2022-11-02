@@ -69,8 +69,6 @@ class MockAstelcoDIMMTestCase(unittest.IsolatedAsyncioTestCase):
     @classmethod
     def setUpClass(cls) -> None:
         cls.log = logging.getLogger()
-        cls.log.addHandler(logging.StreamHandler())
-        cls.log.setLevel(logging.DEBUG)
 
     async def asyncSetUp(self) -> None:
         # Dict of command ID: command
