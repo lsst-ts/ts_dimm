@@ -21,17 +21,16 @@
 __all__ = ["AstelcoDIMM"]
 
 import asyncio
-from collections import defaultdict
 import enum
 import math
 import re
+from collections import defaultdict
 
 import yaml
-
 from lsst.ts.tcpip import LOCAL_HOST, close_stream_writer
 from lsst.ts.utils import index_generator, make_done_future
-from .astelco_enums import TERMINATOR, RainState, SkyStatus
 
+from .astelco_enums import TERMINATOR, RainState, SkyStatus
 from .base_dimm import BaseDIMM, DIMMStatus
 from .mock_astelco_dimm import MockAstelcoDIMM
 

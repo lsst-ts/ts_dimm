@@ -2,7 +2,6 @@
 
 from documenteer.conf.pipelinespkg import *  # type: ignore # noqa
 
-
 project = "ts_dimm"
 html_theme_options["logotext"] = project  # type: ignore # noqa
 html_title = project

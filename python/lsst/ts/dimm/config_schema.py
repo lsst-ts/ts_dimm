@@ -27,7 +27,7 @@ CONFIG_SCHEMA = yaml.safe_load(
     """
 $schema: http://json-schema.org/draft-07/schema#
 $id: https://github.com/lsst-ts/ts_dimm/blob/master/python/lsst/ts/dimm/config_schema.py
-title: DIMM v2
+title: DIMM v3
 description: Schema for DIMM configuration files
 type: object
 properties:
@@ -42,6 +42,10 @@ properties:
             type: integer
             description: SAL index of the DIMM instance.
             minimum: 1
+          measurement_validity:
+            type: number
+            description: >-
+              Specify how long does the DIMM measurements are valid for, in seconds.
           controller:
             type: string
             enum:
@@ -51,5 +55,9 @@ properties:
           config:
             description: Configuration for the DIMM model.
             type: object
+        required:
+          - sal_index
+          - measurement_validity
+          - controller
 """
 )

@@ -36,7 +36,6 @@ __all__ = [
 
 import enum
 
-
 # Unlike most line-based TCP/IP, which use "\r\n",
 # the astelco only requires "\n".
 TERMINATOR = b"\n"

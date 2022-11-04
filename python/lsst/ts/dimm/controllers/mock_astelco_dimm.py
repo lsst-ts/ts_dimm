@@ -30,22 +30,21 @@ import re
 import time
 import types
 
-from lsst.ts import tcpip
-from lsst.ts import utils
+from lsst.ts import tcpip, utils
+
 from .astelco_enums import (
     TERMINATOR,
     AmebaMode,
     AmebaState,
-    ServiceState,
-    ServiceFailState,
-    ServiceControl,
     PowerState,
     RainState,
     ScopeMotionState,
+    ServiceControl,
+    ServiceFailState,
+    ServiceState,
     SkyStatus,
     VariableType,
 )
-
 
 random.seed(47)
 
