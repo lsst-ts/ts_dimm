@@ -4,6 +4,26 @@
 Version History
 ===============
 
+v0.8.3
+------
+
+* Update pre-commit configuration.
+* Run isort in the entire package.
+* In ``tests/test_mock_astelco_dimm.py``, remove unnecessary log setup.
+* In ``tests/data/config/_init.yaml``, add ``measurement_validity``.
+* In ``tests/test_csc.py``:
+
+  * Remove unnecessary logging setup (just run ``pytest --log-cli-level DEBUG``).
+  * Add check for dimmMeasurement expiration time.
+
+* In ``dimm_csc.py``, implement backward compatible change to set expiration date information of dimmMeasurement topic.
+* In ``pyproject.toml``, add ``isort`` configuration.
+* In ``config_schema.py``:
+
+  * Add ``measurement_validity`` configuration parameter.
+  * Make ``sal_index``, ``measurement_validity`` and ``controller`` required parameters.
+
+
 v0.8.2
 ------
 

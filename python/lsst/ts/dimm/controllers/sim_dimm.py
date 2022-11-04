@@ -23,9 +23,9 @@ import asyncio
 
 import numpy as np
 import yaml
+from lsst.ts import utils
 
 from .base_dimm import BaseDIMM, DIMMStatus
-from lsst.ts import utils
 
 __all__ = ["SimDIMM"]
 

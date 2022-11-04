@@ -26,11 +26,7 @@ import time
 import unittest
 
 import pytest
-
-from lsst.ts import dimm
-from lsst.ts import tcpip
-from lsst.ts import utils
-
+from lsst.ts import dimm, tcpip, utils
 from lsst.ts.dimm.controllers.astelco_enums import (
     TERMINATOR,
     AmebaMode,
@@ -38,7 +34,6 @@ from lsst.ts.dimm.controllers.astelco_enums import (
     SkyStatus,
     VariableType,
 )
-
 
 STD_TIMEOUT = 5.0
 
@@ -69,8 +64,6 @@ class MockAstelcoDIMMTestCase(unittest.IsolatedAsyncioTestCase):
     @classmethod
     def setUpClass(cls) -> None:
         cls.log = logging.getLogger()
-        cls.log.addHandler(logging.StreamHandler())
-        cls.log.setLevel(logging.DEBUG)
 
     async def asyncSetUp(self) -> None:
         # Dict of command ID: command

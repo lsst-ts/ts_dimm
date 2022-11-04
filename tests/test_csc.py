@@ -19,22 +19,15 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-import logging
 import pathlib
 import unittest
 
-from lsst.ts import dimm
-from lsst.ts import salobj
+import pytest
+from lsst.ts import dimm, salobj, utils
 
 TEST_CONFIG_DIR = pathlib.Path(__file__).parents[1].joinpath("tests", "data", "config")
 SHORT_TIMEOUT = 5
 MEAS_TIMEOUT = 10
-
-log = logging.getLogger()
-handler = logging.StreamHandler()
-handler.setFormatter(logging.Formatter("%(created)0.2f %(levelname)s: %(message)s"))
-log.addHandler(handler)
-log.setLevel(logging.INFO)
 
 
 class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
@@ -91,6 +84,11 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
             assert data.fwhm > 0.1
             assert data.fluxL > 1000
             assert data.fluxR > 1000
+            if hasattr(data, "expiresAt"):
+                assert data.expiresIn == self.csc.measurement_validity
+                assert data.expiresAt == pytest.approx(
+                    utils.utc_from_tai_unix(data.private_sndStamp) + data.expiresIn
+                )
             # Make sure most commands have been purged from running_commands;
             # it may have a status command.
             assert len(self.csc.controller.running_commands) <= 1
