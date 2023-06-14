@@ -104,16 +104,16 @@ class DIMMCSC(salobj.ConfigurableCsc):
         # A remote to weather station data
         self.ws_remote = salobj.Remote(
             self.domain,
-            "WeatherStation",
-            1,
+            "ESS",
+            301,
             readonly=True,
             include=[
-                "weather",
-                "windSpeed",
-                "windDirection",
+                "temperature",
+                "relativeHumidity",
+                "pressure",
+                "airFlow",
                 "dewPoint",
                 "precipitation",
-                "snowDepth",
             ],
         )
 

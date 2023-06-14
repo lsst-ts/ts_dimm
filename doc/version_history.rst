@@ -4,6 +4,13 @@
 Version History
 ===============
 
+v0.9.0
+------
+
+* Replace WeatherStation CSC with ESS:301.
+* Modernize CI build script.
+* Update to support ts-pre-commit.
+
 v0.8.3
 ------
 
