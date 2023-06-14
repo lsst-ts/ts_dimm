@@ -92,7 +92,6 @@ class SOARDIMM(BaseDIMM):
         """Coroutine to check the database for new measurements."""
 
         while True:
-
             # self.measurement_queue.append(measurement)
 
             await asyncio.sleep(self.check_interval)
