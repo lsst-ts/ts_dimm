@@ -25,6 +25,7 @@ import enum
 import math
 import re
 from collections import defaultdict
+from statistics import mean
 
 import yaml
 from lsst.ts.tcpip import LOCAL_HOST, close_stream_writer
@@ -208,7 +209,7 @@ class AstelcoDIMM(BaseDIMM):
         self.ws_remote = None
 
         # The DIMM WEATHER.RAIN is set based on two separate weather station
-        # topics: tel_precipitation and tel_snowDepth.
+        # topics: evt_precipitation.
         self.is_raining = False
         self.is_snowing = False
 
@@ -288,12 +289,12 @@ properties:
 
         if not self.simulate:
             # Set weather station callbacks.
-            self.ws_remote.tel_weather.callback = self.weather_callback
-            self.ws_remote.tel_windSpeed.callback = self.wind_speed_callback
-            self.ws_remote.tel_windDirection.callback = self.wind_direction_callback
+            self.ws_remote.tel_temperature.callback = self.temperature_callback
+            self.ws_remote.tel_relativeHumidity.callback = self.humidity_callback
+            self.ws_remote.tel_pressure.callback = self.pressure_callback
+            self.ws_remote.tel_airFlow.callback = self.air_flow_callback
             self.ws_remote.tel_dewPoint.callback = self.dew_point_callback
-            self.ws_remote.tel_precipitation.callback = self.precipitation_callback
-            self.ws_remote.tel_snowDepth.callback = self.snow_depth_callback
+            self.ws_remote.evt_precipitation.callback = self.precipitation_callback
 
         # Set SKY to values that allow automatic operation if WEATHER data
         # is acceptable (as set by the weather station callbacks).
@@ -312,12 +313,12 @@ properties:
             self.status["status"] = DIMMStatus["ERROR"]
             raise RuntimeError("No WeatherStation remote available")
 
-        self.ws_remote.tel_weather.callback = None
-        self.ws_remote.tel_windSpeed.callback = None
-        self.ws_remote.tel_windDirection.callback = None
+        self.ws_remote.tel_temperature.callback = None
+        self.ws_remote.tel_relativeHumidity.callback = None
+        self.ws_remote.tel_pressure.callback = None
+        self.ws_remote.tel_airFlow.callback = None
         self.ws_remote.tel_dewPoint.callback = None
-        self.ws_remote.tel_precipitation.callback = None
-        self.ws_remote.tel_snowDepth.callback = None
+        self.ws_remote.evt_precipitation.callback = None
 
         # TODO: Change to STOPPED?
         self.status["status"] = DIMMStatus["INITIALIZED"]
@@ -738,68 +739,45 @@ properties:
             return False
         return True
 
-    async def weather_callback(self, data):
-        """Sends information about; ambient_temp (C), humidity (%) and
-        pressure (mBar) to the DIMM.
+    async def temperature_callback(self, data):
+        """Sends information about ambient temperature (C) to the DIMM."""
+        if data.numChannels > 0:
+            await self.run_command(
+                "SET", f"WEATHER.TEMP_AMB={mean(data.temperature[:data.numChannels])}"
+            )
 
-        The DIMM uses weather information to stablish if it should operate or
-        not. If information is not continuously publish the DIMM will close
-        due to safety issues.
+    async def humidity_callback(self, data):
+        """Sends information about humidity (%) to the DIMM."""
+        await self.run_command("SET", f"WEATHER.RH={data.relativeHumidity}")
+
+    async def pressure_callback(self, data):
+        """Sends information about pressure (mBar) to the DIMM."""
+        if data.numChannels > 1:
+            # Pressure values are in Pa. Convert to mBar by dividing it by
+            # 100.
+            await self.run_command(
+                "SET",
+                f"WEATHER.PRESSURE={mean(data.pressure[:data.numChannels])/100.0}",
+            )
+
+    async def air_flow_callback(self, data):
+        """Sends information about wind speed (m/s) and direction to the
+        DIMM.
         """
-
-        await self.run_command(
-            "SET",
-            f"WEATHER.TEMP_AMB={data.ambient_temp};"
-            f"WEATHER.RH={data.humidity};"
-            f"WEATHER.PRESSURE={data.pressure}",
-        )
-
-    async def wind_speed_callback(self, data):
-        """Sends information about wind speed (m/s) to the DIMM.
-
-        Uses 2 minutes average information from weather station if average
-        contains a valid values (>0), otherwise sends instantaneous if valid
-        and don't update if none are valid. Note that this may cause the
-        DIMM to shut-off if to many cycles are lost.
-        """
-        if data.avg2M > 0.0:
-            await self.run_command("SET", f"WEATHER.WIND={data.avg2M}")
-        elif data.value >= 0.0:
-            await self.run_command("SET", f"WEATHER.WIND={data.value}")
-
-    async def wind_direction_callback(self, data):
-        """Send wind direction to the DIMM.
-
-        The weather station and DIMM use the same convention
-        for wind direction: clockwise from due north.
-
-        Use 2 minutes average from weather station if valid,
-        else instantaneous, if valid, else don't send anything.
-        """
-        if data.avg2M > 0.0:
-            await self.run_command("SET", f"WEATHER.WIND_DIR={data.avg2M}")
-        elif data.value >= 0.0:
-            await self.run_command("SET", f"WEATHER.WIND_DIR={data.value}")
+        if data.speed >= 0.0:
+            await self.run_command("SET", f"WEATHER.WIND={data.speed}")
+        if data.direction >= 0.0:
+            await self.run_command("SET", f"WEATHER.WIND_DIR={data.direction}")
 
     async def dew_point_callback(self, data):
-        """Send dew point (C) to the DIMM.
-
-        Use 1 minute average from weather station, if valid,
-        else don't send anything.
-        """
-        if data.avg1M > -99.0:
-            await self.run_command("SET", f"WEATHER.TEMP_DEW={data.avg1M}")
+        """Send dew point (C) to the DIMM."""
+        if data.dewPoint > -99.0:
+            await self.run_command("SET", f"WEATHER.TEMP_DEW={data.dewPoint}")
 
     async def precipitation_callback(self, data):
-        """Set self.is_raining and update DIMM WEATHER.RAIN"""
-        if data.prSum1M > -99.0:
-            self.is_raining = data.prSum1M > 0.0
-        await self.set_weather_rain()
-
-    async def snow_depth_callback(self, data):
-        """Set self.is_snowing and update DIMM WEATHER.RAIN"""
-        if data.avg1M > -99.0:
-            self.is_snowing = data.avg1M > 0.0
+        """Set self.is_raining/self.is_snowing and update DIMM WEATHER.RAIN"""
+        self.is_raining = data.raining
+        self.is_snowing = data.snowing
         await self.set_weather_rain()
 
     async def set_weather_rain(self):
@@ -827,19 +805,33 @@ properties:
         if not self.simulate:
             raise RuntimeError("Only allowed in simulation mode")
 
-        await self.weather_callback(
-            self.ws_remote.tel_weather.DataType(
-                ambient_temp=0,
-                humidity=self.mock_dimm.config.HumLow * 0.9,
-                pressure=0.5,
+        temperature_data = self.ws_remote.tel_temperature.DataType()
+        temperature_data.numChannels = 1
+        temperature_data.temperature[0] = 0.0
+        await self.temperature_callback(
+            temperature_data,
+        )
+        await self.humidity_callback(
+            self.ws_remote.tel_relativeHumidity.DataType(
+                relativeHumidity=self.mock_dimm.config.HumLow * 0.9,
             )
         )
-        await self.wind_speed_callback(
-            self.ws_remote.tel_windSpeed.DataType(
-                avg2M=self.mock_dimm.config.WindLow * 0.9,
-                value=self.mock_dimm.config.WindLow * 0.9,
+        pressure_data = self.ws_remote.tel_pressure.DataType()
+        pressure_data.numChannels = 1
+        pressure_data.pressure[0] = 0.5
+        await self.pressure_callback(
+            pressure_data,
+        )
+
+        await self.air_flow_callback(
+            self.ws_remote.tel_airFlow.DataType(
+                speed=self.mock_dimm.config.WindLow * 0.9,
+                direction=90.0,
             )
         )
         await self.precipitation_callback(
-            self.ws_remote.tel_precipitation.DataType(prSum1M=0)
+            self.ws_remote.evt_precipitation.DataType(
+                raining=False,
+                snowing=False,
+            )
         )
