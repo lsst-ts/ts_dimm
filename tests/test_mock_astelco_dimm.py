@@ -227,7 +227,6 @@ class MockAstelcoDIMMTestCase(unittest.IsolatedAsyncioTestCase):
                     assert meas0[field] != meas1[field]
 
     async def test_get_command(self):
-
         # Test that authentication is required
         good_get_arg = "AMEBA.CURRENT.NAME"
         command = await self.run_command("GET", good_get_arg, should_pass=False)
