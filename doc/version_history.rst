@@ -4,6 +4,11 @@
 Version History
 ===============
 
+v0.9.1
+------
+
+* Fix measurement expiration timestamp.
+
 v0.9.0
 ------
 

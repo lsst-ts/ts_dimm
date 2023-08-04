@@ -23,7 +23,7 @@ import asyncio
 import traceback
 import types
 
-from lsst.ts import salobj, utils
+from lsst.ts import salobj
 from lsst.ts.dimm import controllers
 
 from . import __version__
@@ -368,13 +368,10 @@ class DIMMCSC(salobj.ConfigurableCsc):
                 # Only send telemetry if the controller is operational
                 if data is not None and self.controller_running:
                     converted_data = convert_dimm_measurement_data(data)
-                    # Add expiration information
-                    if hasattr(self.evt_dimmMeasurement.DataType(), "expiresAt"):
-                        converted_data["expiresAt"] = (
-                            utils.utc_from_tai_unix(utils.current_tai())
-                            + self.measurement_validity
-                        )
-                        converted_data["expiresIn"] = self.measurement_validity
+                    converted_data["expiresAt"] = (
+                        converted_data["timestamp"] + self.measurement_validity
+                    )
+                    converted_data["expiresIn"] = self.measurement_validity
 
                     await self.evt_dimmMeasurement.set_write(**converted_data)
                 await asyncio.sleep(self.heartbeat_interval)
