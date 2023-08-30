@@ -306,24 +306,22 @@ properties:
     async def stop(self):
         """Stop DIMM. Overwrites method from base class."""
 
-        # Tell the DIMM to close up (1=preciptating)
-        await self.run_command("SET", f"SKY.status={SkyStatus.PRECIPTATING}")
-
-        if self.ws_remote is None:
-            self.status["status"] = DIMMStatus["ERROR"]
-            raise RuntimeError("No WeatherStation remote available")
-
-        self.ws_remote.tel_temperature.callback = None
-        self.ws_remote.tel_relativeHumidity.callback = None
-        self.ws_remote.tel_pressure.callback = None
-        self.ws_remote.tel_airFlow.callback = None
-        self.ws_remote.tel_dewPoint.callback = None
-        self.ws_remote.evt_precipitation.callback = None
+        if self.ws_remote is not None:
+            self.ws_remote.tel_temperature.callback = None
+            self.ws_remote.tel_relativeHumidity.callback = None
+            self.ws_remote.tel_pressure.callback = None
+            self.ws_remote.tel_airFlow.callback = None
+            self.ws_remote.tel_dewPoint.callback = None
+            self.ws_remote.evt_precipitation.callback = None
 
         # TODO: Change to STOPPED?
         self.status["status"] = DIMMStatus["INITIALIZED"]
-        self.connect_task.cancel()
-        await self.disconnect()
+
+        # Tell the DIMM to close up (1=preciptating)
+        if self.connected:
+            await self.run_command("SET", f"SKY.status={SkyStatus.PRECIPTATING}")
+            self.connect_task.cancel()
+            await self.disconnect()
 
     async def status_loop(self):
         """Monitor DIMM status and update `self.status` dictionary
