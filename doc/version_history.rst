@@ -4,6 +4,11 @@
 Version History
 ===============
 
+v0.9.2
+------
+
+* Improve error handling in ``AstelcoDIMM``.
+
 v0.9.1
 ------
 

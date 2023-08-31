@@ -153,6 +153,22 @@ def assert_command_not_none(cmdid, command):
         raise CommandError(f"Unrecognized command {cmdid}")
 
 
+def connection_handler(coroutine):
+    """A decorator that will handle issues with the tcp/ip connection."""
+
+    async def connection_handler_wrapper(self, *args, **kwargs):
+        try:
+            if not self.connected:
+                raise RuntimeError("Not connected")
+            return await coroutine(self, *args, **kwargs)
+        except Exception:
+            self.status["status"] = DIMMStatus["ERROR"]
+            await self.disconnect()
+            raise
+
+    return connection_handler_wrapper
+
+
 class AstelcoDIMM(BaseDIMM):
     r"""Client for an Astelco autonomous DIMM.
 
@@ -306,24 +322,22 @@ properties:
     async def stop(self):
         """Stop DIMM. Overwrites method from base class."""
 
-        # Tell the DIMM to close up (1=preciptating)
-        await self.run_command("SET", f"SKY.status={SkyStatus.PRECIPTATING}")
-
-        if self.ws_remote is None:
-            self.status["status"] = DIMMStatus["ERROR"]
-            raise RuntimeError("No WeatherStation remote available")
-
-        self.ws_remote.tel_temperature.callback = None
-        self.ws_remote.tel_relativeHumidity.callback = None
-        self.ws_remote.tel_pressure.callback = None
-        self.ws_remote.tel_airFlow.callback = None
-        self.ws_remote.tel_dewPoint.callback = None
-        self.ws_remote.evt_precipitation.callback = None
+        if self.ws_remote is not None:
+            self.ws_remote.tel_temperature.callback = None
+            self.ws_remote.tel_relativeHumidity.callback = None
+            self.ws_remote.tel_pressure.callback = None
+            self.ws_remote.tel_airFlow.callback = None
+            self.ws_remote.tel_dewPoint.callback = None
+            self.ws_remote.evt_precipitation.callback = None
 
         # TODO: Change to STOPPED?
         self.status["status"] = DIMMStatus["INITIALIZED"]
-        self.connect_task.cancel()
-        await self.disconnect()
+
+        # Tell the DIMM to close up (1=preciptating)
+        if self.connected:
+            await self.run_command("SET", f"SKY.status={SkyStatus.PRECIPTATING}")
+            self.connect_task.cancel()
+            await self.disconnect()
 
     async def status_loop(self):
         """Monitor DIMM status and update `self.status` dictionary
@@ -441,7 +455,10 @@ properties:
         self.reply_loop_task.cancel()
         self.status_loop_task.cancel()
         if self.connected:
-            await self.write_cmdstr("DISCONNECT")
+            try:
+                await self.write_cmdstr("DISCONNECT")
+            except Exception:
+                self.log.exception("Error trying to disconnect. Ignoring.")
         writer = self.writer
         self.reader = None
         self.writer = None
@@ -520,6 +537,7 @@ properties:
             await command.done_task
         return command
 
+    @connection_handler
     async def write_cmdstr(self, cmdstr):
         """Write a command string to the T2SA, after adding a terminator.
 
@@ -528,22 +546,18 @@ properties:
         cmdstr : `str`
             The message to write, as a string with no terminator.
         """
-        if not self.connected:
-            raise RuntimeError("Not connected")
         cmdbytes = cmdstr.encode() + TERMINATOR
         self.log.debug(f"Write to T2SA: {cmdbytes}")
         self.writer.write(cmdbytes)
         await self.writer.drain()
 
+    @connection_handler
     async def read_reply(self):
         """Read a reply from the T2SA.
 
         Return the reply after decoding and stripping surrounding whitespace
         and terminators.
         """
-        if not self.connected:
-            raise RuntimeError("Not connected")
-
         reply_bytes = await self.reader.readuntil(TERMINATOR)
         self.log.debug(f"Read from T2SA: {reply_bytes}")
         return reply_bytes.decode().strip()
