@@ -92,3 +92,27 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
             # Make sure most commands have been purged from running_commands;
             # it may have a status command.
             assert len(self.csc.controller.running_commands) <= 1
+
+    async def test_astelco_dimm_fault_on_disconnect(self):
+        async with self.make_csc(
+            initial_state=salobj.State.STANDBY,
+            config_dir=TEST_CONFIG_DIR,
+            simulation_mode=1,
+        ):
+            await salobj.set_summary_state(
+                remote=self.remote, state=salobj.State.ENABLED
+            )
+
+            # wait for one measurement to arrive
+            await self.remote.evt_dimmMeasurement.next(flush=True, timeout=MEAS_TIMEOUT)
+            self.remote.evt_summaryState.flush()
+
+            # close the mock controller
+            await self.csc.controller.mock_dimm.close()
+
+            await self.assert_next_summary_state(
+                state=salobj.State.FAULT,
+                flush=False,
+                remote=self.remote,
+            )
+            assert not self.csc.controller.connected
