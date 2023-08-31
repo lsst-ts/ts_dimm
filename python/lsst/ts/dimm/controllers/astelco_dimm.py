@@ -439,7 +439,10 @@ properties:
         self.reply_loop_task.cancel()
         self.status_loop_task.cancel()
         if self.connected:
-            await self.write_cmdstr("DISCONNECT")
+            try:
+                await self.write_cmdstr("DISCONNECT")
+            except Exception:
+                self.log.exception("Error trying to disconnect. Ignoring.")
         writer = self.writer
         self.reader = None
         self.writer = None
