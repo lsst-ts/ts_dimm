@@ -15,7 +15,7 @@ build:
 test:
   requires:
     - sqlalchemy
-    - ts-conda-build =0.3
+    - ts-conda-build =0.4
     - ts-dds
     - ts-idl {{ idl_version }}
     - ts-salobj {{ salobj_version }}
@@ -39,7 +39,7 @@ requirements:
     - python {{ python }}
     - setuptools
     - setuptools_scm
-    - ts-conda-build =0.3
+    - ts-conda-build =0.4
   run:
     - python {{ python }}
     - setuptools
