@@ -99,6 +99,27 @@ class DIMMCSC(salobj.ConfigurableCsc):
             config_dir=config_dir,
             initial_state=initial_state,
             simulation_mode=simulation_mode,
+            extra_commands={
+                # DM-48873 Remove after Cycle 39 XML is phased out.
+                "init",
+                "park",
+                "parkMount",
+                "clearMountError",
+                "defineFocus",
+                "moveDomeSideA",
+                "moveDomeSideB",
+                "point",
+                "runDimmManual",
+                "setAmebaMode",
+                "setManualTarget",
+                "setProgramStatus",
+                "setSky",
+                "setWeather",
+                "stop",
+                "stopDimmManual",
+                "offsetFocus",
+                "offsetPointing",
+            },
         )
 
         # A remote to weather station data
@@ -323,6 +344,7 @@ class DIMMCSC(salobj.ConfigurableCsc):
                 self.log.debug(f"Controller running? {self.controller_running}")
 
                 state_topic = self.prepare_status_telemetry(state)
+                state_topic = self.clean_topic(self.tel_status.DataType, state_topic)
                 try:
                     await self.tel_status.set_write(**state_topic)
                 except ValueError:
@@ -372,6 +394,7 @@ class DIMMCSC(salobj.ConfigurableCsc):
                         converted_data["timestamp"] + self.measurement_validity
                     )
                     converted_data["expiresIn"] = self.measurement_validity
+                    converted_data = self.clean_topic(self.evt_dimmMeasurement.DataType, converted_data)
 
                     await self.evt_dimmMeasurement.set_write(**converted_data)
                 await asyncio.sleep(self.heartbeat_interval)
@@ -386,6 +409,97 @@ class DIMMCSC(salobj.ConfigurableCsc):
                 )
                 break
 
+    def clean_topic(self, data_type, kwargs):
+        """Adjusts the state_topic dictionary to conform with the XML schema.
+
+        Adds the missing keys from the state_topic dictionary, setting
+        those to the default of the correct data type. Removes keys from
+        the dictionary that are not part of the schema.
+
+        TODO: DM-48873 remove this function and all calls to it.
+
+        Parameters
+        ----------
+        data_type : type
+            The SAL schema to apply to the dictionary.
+
+        kwargs : dict[str, Any]
+            The dictionary to be cleaned up.
+
+        Returns
+        -------
+        dict[str, Any]
+            The cleaned dictionary.
+        """
+        schema = data_type().get_vars()
+        base_attributes = {
+            "private_identity",
+            "private_origin",
+            "private_rcvStamp",
+            "private_revCode",
+            "private_seqNum",
+            "private_sndStamp",
+            "salIndex",
+        }
+        for base_attribute in base_attributes:
+            del schema[base_attribute]
+
+        # Add missing keys with default values
+        for key, value in schema.items():
+            if key not in kwargs:
+                kwargs[key] = value  # Default value of zero
+
+        # Remove keys that are not in the schema
+        keys_to_remove = [key for key in kwargs if key not in schema]
+        for key in keys_to_remove:
+            del kwargs[key]
+
+        return kwargs
+
+    async def do_init(self, data):
+        """Initialize program(s) by sending INIT via the Kornilov protocol.
+
+        Parameters
+        ----------
+        data : A SALOBJ data object
+            Contains the data as defined in the SAL XML file.
+        """
+        self.assert_enabled()
+        raise salobj.ExpectedError("Not implemented yet.")
+
+    async def do_park(self, data):
+        """Park program(s) on the DIMM via the Kornilov protocol.
+
+        Parameters
+        ----------
+        data : A SALOBJ data object
+            Contains the data as defined in the SAL XML file.
+        """
+        self.assert_enabled()
+        raise salobj.ExpectedError("Not implemented yet.")
+
+    async def do_parkMount(self, data):
+        """Park program(s) on the DIMM via the Kornilov protocol.
+
+        Parameters
+        ----------
+        data : A SALOBJ data object
+            Contains the data as defined in the SAL XML file.
+        """
+        self.assert_enabled()
+        raise salobj.ExpectedError("Not implemented yet.")
+
+    async def do_clearMountError(self, data):
+        """Reset telescope error conditions.
+
+        Parameters
+        ----------
+        data : A SALOBJ data object
+            Contains the data as defined in the SAL XML file.
+        """
+        self.assert_enabled()
+        raise salobj.ExpectedError("Not implemented yet.")
+
     async def do_gotoAltAz(self, data):
         """Move to Alt/AZ position.
 
@@ -399,6 +513,167 @@ class DIMMCSC(salobj.ConfigurableCsc):
 
     async def do_gotoRaDec(self, data):
         """Move to RA/DEC position.
+
+        Parameters
+        ----------
+        data : A SALOBJ data object
+            Contains the data as defined in the SAL XML file.
+        """
+        self.assert_enabled()
+        raise salobj.ExpectedError("Not implemented yet.")
+
+    async def do_defineFocus(self, data):
+        """Defines the current focus position to the position specified.
+
+        Future telemetry will show the focuser at this position. The focuser
+        is not physically moved by this command.
+
+        Parameters
+        ----------
+        data : A SALOBJ data object
+            Contains the data as defined in the SAL XML file.
+        """
+        self.assert_enabled()
+        raise salobj.ExpectedError("Not implemented yet.")
+
+    async def do_moveDomeSideA(self, data):
+        """Manually move the first dome side to the requested position.
+
+        Parameters
+        ----------
+        data : A SALOBJ data object
+            Contains the data as defined in the SAL XML file.
+        """
+        self.assert_enabled()
+        raise salobj.ExpectedError("Not implemented yet.")
+
+    async def do_moveDomeSideB(self, data):
+        """Manually move the second dome side to the requested position.
+
+        Parameters
+        ----------
+        data : A SALOBJ data object
+            Contains the data as defined in the SAL XML file.
+        """
+        self.assert_enabled()
+        raise salobj.ExpectedError("Not implemented yet.")
+
+    async def do_point(self, data):
+        """Start equatorial tracking at the set up location.
+
+        Parameters
+        ----------
+        data : A SALOBJ data object
+            Contains the data as defined in the SAL XML file.
+        """
+        self.assert_enabled()
+        raise salobj.ExpectedError("Not implemented yet.")
+
+    async def do_runDimmManual(self, data):
+        """Manually begin the DIMM control loop.
+
+        Parameters
+        ----------
+        data : A SALOBJ data object
+            Contains the data as defined in the SAL XML file.
+        """
+        self.assert_enabled()
+        raise salobj.ExpectedError("Not implemented yet.")
+
+    async def do_setAmebaMode(self, data):
+        """Set ameba mode (off, auto, or manual) through tt-master.
+
+        Parameters
+        ----------
+        data : A SALOBJ data object
+            Contains the data as defined in the SAL XML file.
+        """
+        self.assert_enabled()
+        raise salobj.ExpectedError("Not implemented yet.")
+
+    async def do_setManualTarget(self, data):
+        """Set up a manual target in the AMEBA module.
+
+        Parameters
+        ----------
+        data : A SALOBJ data object
+            Contains the data as defined in the SAL XML file.
+        """
+        self.assert_enabled()
+        raise salobj.ExpectedError("Not implemented yet.")
+
+    async def do_setProgramStatus(self, data):
+        """Send command(s) to change the state of program(s) on the DIMM.
+
+        For each item, use a value from the ProgramControl enumeration to
+        specify the desired action, or NoAction to leave the state of the
+        program as it was.
+
+        Parameters
+        ----------
+        data : A SALOBJ data object
+            Contains the data as defined in the SAL XML file.
+        """
+        self.assert_enabled()
+        raise salobj.ExpectedError("Not implemented yet.")
+
+    async def do_setSky(self, data):
+        """Send sky sensor data to the DIMM.
+
+        Parameters
+        ----------
+        data : A SALOBJ data object
+            Contains the data as defined in the SAL XML file.
+        """
+        self.assert_enabled()
+        raise salobj.ExpectedError("Not implemented yet.")
+
+    async def do_setWeather(self, data):
+        """Send weather data to the DIMM.
+
+        Parameters
+        ----------
+        data : A SALOBJ data object
+            Contains the data as defined in the SAL XML file.
+        """
+        self.assert_enabled()
+        raise salobj.ExpectedError("Not implemented yet.")
+
+    async def do_stop(self, data):
+        """Discontinue tracking without parking or otherwise moving the telescope.
+
+        Parameters
+        ----------
+        data : A SALOBJ data object
+            Contains the data as defined in the SAL XML file.
+        """
+        self.assert_enabled()
+        raise salobj.ExpectedError("Not implemented yet.")
+
+    async def do_stopDimmManual(self, data):
+        """Manually stop the DIMM control loop.
+
+        Parameters
+        ----------
+        data : A SALOBJ data object
+            Contains the data as defined in the SAL XML file.
+        """
+        self.assert_enabled()
+        raise salobj.ExpectedError("Not implemented yet.")
+
+    async def do_offsetFocus(self, data):
+        """Apply an offset to the focuser position.
+
+        Parameters
+        ----------
+        data : A SALOBJ data object
+            Contains the data as defined in the SAL XML file.
+        """
+        self.assert_enabled()
+        raise salobj.ExpectedError("Not implemented yet.")
+
+    async def do_offsetPointing(self, data):
+        """Apply an offset to the telescope's pointing.
 
         Parameters
         ----------
