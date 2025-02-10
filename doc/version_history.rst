@@ -4,6 +4,11 @@
 Version History
 ===============
 
+v0.9.3
+------
+
+* Update for the latest ts-tcpip and ESS CSC XML.
+
 v0.9.2
 ------
 

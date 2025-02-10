@@ -23,7 +23,7 @@ import asyncio
 import traceback
 import types
 
-from lsst.ts import salobj
+from lsst.ts import salobj, utils
 from lsst.ts.dimm import controllers
 
 from . import __version__
@@ -127,7 +127,7 @@ class DIMMCSC(salobj.ConfigurableCsc):
         self.telemetry_loop_task = None
 
         self.seeing_loop_running = False
-        self.seeing_loop_task = None
+        self.seeing_loop_task = utils.make_done_future()
 
         self.csc_running = True
         self.measurement_validity = None
