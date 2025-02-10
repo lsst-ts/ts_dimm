@@ -7,7 +7,8 @@ Version History
 v0.9.3
 ------
 
-* Update for the latest ts-tcpip and ESS CSC XML.
+* Updated for the latest ts-tcpip and ESS CSC XML.
+* Added commands and telemetry for the DIMM XML.
 
 v0.9.2
 ------
