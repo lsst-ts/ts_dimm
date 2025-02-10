@@ -757,7 +757,8 @@ properties:
         """Sends information about ambient temperature (C) to the DIMM."""
         if data.numChannels > 0:
             await self.run_command(
-                "SET", f"WEATHER.TEMP_AMB={mean(data.temperatureItem[:data.numChannels])}"
+                "SET",
+                f"WEATHER.TEMP_AMB={mean(data.temperatureItem[:data.numChannels])}",
             )
 
     async def humidity_callback(self, data):

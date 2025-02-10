@@ -226,14 +226,13 @@ class DIMMCSC(salobj.ConfigurableCsc):
         try:
             await self.controller.start()
         except Exception:
-            self.log.exception(
-                "Failed starting the controller.", report="DIMM reported error state."
-            )
+            self.log.exception("Failed starting the controller.")
             await self.fault(code=CONTROLLER_START_FAILED)
             raise RuntimeError(
                 "Failed to start controller. Check configuration and make sure DIMM"
                 "controller is alive and reachable by the CSC."
             )
+
         self.telemetry_loop_task = asyncio.create_task(self.telemetry_loop())
         self.seeing_loop_task = asyncio.create_task(self.seeing_loop())
 
@@ -344,7 +343,7 @@ class DIMMCSC(salobj.ConfigurableCsc):
                 self.log.debug(f"Controller running? {self.controller_running}")
 
                 state_topic = self.prepare_status_telemetry(state)
-                state_topic = self.clean_topic(self.tel_status.DataType, state_topic)
+                state_topic = self.clean_topic("tel_status", state_topic)
                 try:
                     await self.tel_status.set_write(**state_topic)
                 except ValueError:
@@ -394,7 +393,9 @@ class DIMMCSC(salobj.ConfigurableCsc):
                         converted_data["timestamp"] + self.measurement_validity
                     )
                     converted_data["expiresIn"] = self.measurement_validity
-                    converted_data = self.clean_topic(self.evt_dimmMeasurement.DataType, converted_data)
+                    converted_data = self.clean_topic(
+                        "evt_dimmMeasurement", converted_data
+                    )
 
                     await self.evt_dimmMeasurement.set_write(**converted_data)
                 await asyncio.sleep(self.heartbeat_interval)
@@ -409,7 +410,7 @@ class DIMMCSC(salobj.ConfigurableCsc):
                 )
                 break
 
-    def clean_topic(self, data_type, kwargs):
+    def clean_topic(self, topic_name, kwargs):
         """Adjusts the state_topic dictionary to conform with the XML schema.
 
         Adds the missing keys from the state_topic dictionary, setting
@@ -420,8 +421,8 @@ class DIMMCSC(salobj.ConfigurableCsc):
 
         Parameters
         ----------
-        data_type : type
-            The SAL schema to apply to the dictionary.
+        topic_name : str
+            The name of the topic for the SAL schema to apply.
 
         kwargs : dict[str, Any]
             The dictionary to be cleaned up.
@@ -431,7 +432,12 @@ class DIMMCSC(salobj.ConfigurableCsc):
         dict[str, Any]
             The cleaned dictionary.
         """
-        schema = data_type().get_vars()
+        # Get all the fields for either DDS or Kafka salobj (h/t Wouter)
+        schema = {}
+        if hasattr(self.salinfo, "metadata"):
+            schema = set(self.salinfo.metadata.topic_info[topic_name].field_info.keys())
+        elif hasattr(self.salinfo, "component_info"):
+            schema = set(self.salinfo.component_info.topics[topic_name].fields.keys())
         base_attributes = {
             "private_identity",
             "private_origin",
@@ -441,13 +447,12 @@ class DIMMCSC(salobj.ConfigurableCsc):
             "private_sndStamp",
             "salIndex",
         }
-        for base_attribute in base_attributes:
-            del schema[base_attribute]
+        schema -= base_attributes
 
         # Add missing keys with default values
-        for key, value in schema.items():
+        for key in schema:
             if key not in kwargs:
-                kwargs[key] = value  # Default value of zero
+                kwargs[key] = 0  # Default value of zero
 
         # Remove keys that are not in the schema
         keys_to_remove = [key for key in kwargs if key not in schema]
@@ -640,7 +645,7 @@ class DIMMCSC(salobj.ConfigurableCsc):
         raise salobj.ExpectedError("Not implemented yet.")
 
     async def do_stop(self, data):
-        """Discontinue tracking without parking or otherwise moving the telescope.
+        """Discontinue tracking without otherwise moving the telescope.
 
         Parameters
         ----------
@@ -722,11 +727,14 @@ class DIMMCSC(salobj.ConfigurableCsc):
         """
         while self.csc_running:
             if self.summary_state == salobj.State.ENABLED:
-                if self.seeing_loop_task.done():
+                if self.seeing_loop_task is not None and self.seeing_loop_task.done():
                     error_report = "Seeing loop died while in enable state."
                     await self.fault(code=SEEING_LOOP_DONE, report=error_report)
 
-                if self.telemetry_loop_task.done():
+                if (
+                    self.telemetry_loop_task is not None
+                    and self.telemetry_loop_task.done()
+                ):
                     error_report = "Telemetry loop died while in enable state."
                     await self.fault(code=TELEMETRY_LOOP_DONE, report=error_report)
 
