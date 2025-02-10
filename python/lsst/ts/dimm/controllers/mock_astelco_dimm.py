@@ -70,7 +70,7 @@ ScopeDataRange = types.SimpleNamespace(
 # The values for seeing are mean and std dev for a Gaussian distribution
 # the others are min and max for a uniform distribution
 DIMMDataRange = types.SimpleNamespace(
-    seeing=(0.5, 2.5),  # mean, std dev
+    seeing=(1.0, 0.2),  # mean, std dev
     flux_left=(10000, 20000),
     flux_right=(10000, 20000),
     flux_rms_left=(10000, 20000),
