@@ -101,24 +101,8 @@ class DIMMCSC(salobj.ConfigurableCsc):
             simulation_mode=simulation_mode,
             extra_commands={
                 # DM-48873 Remove after Cycle 39 XML is phased out.
-                "init",
-                "park",
-                "parkMount",
-                "clearMountError",
-                "defineFocus",
-                "moveDomeSideA",
-                "moveDomeSideB",
-                "point",
-                "runDimmManual",
+                "moveDome",
                 "setAmebaMode",
-                "setManualTarget",
-                "setProgramStatus",
-                "setSky",
-                "setWeather",
-                "stop",
-                "stopDimmManual",
-                "offsetFocus",
-                "offsetPointing",
             },
         )
 
@@ -461,50 +445,6 @@ class DIMMCSC(salobj.ConfigurableCsc):
 
         return kwargs
 
-    async def do_init(self, data):
-        """Initialize program(s) by sending INIT via the Kornilov protocol.
-
-        Parameters
-        ----------
-        data : A SALOBJ data object
-            Contains the data as defined in the SAL XML file.
-        """
-        self.assert_enabled()
-        raise salobj.ExpectedError("Not implemented yet.")
-
-    async def do_park(self, data):
-        """Park program(s) on the DIMM via the Kornilov protocol.
-
-        Parameters
-        ----------
-        data : A SALOBJ data object
-            Contains the data as defined in the SAL XML file.
-        """
-        self.assert_enabled()
-        raise salobj.ExpectedError("Not implemented yet.")
-
-    async def do_parkMount(self, data):
-        """Park program(s) on the DIMM via the Kornilov protocol.
-
-        Parameters
-        ----------
-        data : A SALOBJ data object
-            Contains the data as defined in the SAL XML file.
-        """
-        self.assert_enabled()
-        raise salobj.ExpectedError("Not implemented yet.")
-
-    async def do_clearMountError(self, data):
-        """Reset telescope error conditions.
-
-        Parameters
-        ----------
-        data : A SALOBJ data object
-            Contains the data as defined in the SAL XML file.
-        """
-        self.assert_enabled()
-        raise salobj.ExpectedError("Not implemented yet.")
-
     async def do_gotoAltAz(self, data):
         """Move to Alt/AZ position.
 
@@ -527,55 +467,8 @@ class DIMMCSC(salobj.ConfigurableCsc):
         self.assert_enabled()
         raise salobj.ExpectedError("Not implemented yet.")
 
-    async def do_defineFocus(self, data):
-        """Defines the current focus position to the position specified.
-
-        Future telemetry will show the focuser at this position. The focuser
-        is not physically moved by this command.
-
-        Parameters
-        ----------
-        data : A SALOBJ data object
-            Contains the data as defined in the SAL XML file.
-        """
-        self.assert_enabled()
-        raise salobj.ExpectedError("Not implemented yet.")
-
-    async def do_moveDomeSideA(self, data):
-        """Manually move the first dome side to the requested position.
-
-        Parameters
-        ----------
-        data : A SALOBJ data object
-            Contains the data as defined in the SAL XML file.
-        """
-        self.assert_enabled()
-        raise salobj.ExpectedError("Not implemented yet.")
-
-    async def do_moveDomeSideB(self, data):
+    async def do_moveDome(self, data):
         """Manually move the second dome side to the requested position.
-
-        Parameters
-        ----------
-        data : A SALOBJ data object
-            Contains the data as defined in the SAL XML file.
-        """
-        self.assert_enabled()
-        raise salobj.ExpectedError("Not implemented yet.")
-
-    async def do_point(self, data):
-        """Start equatorial tracking at the set up location.
-
-        Parameters
-        ----------
-        data : A SALOBJ data object
-            Contains the data as defined in the SAL XML file.
-        """
-        self.assert_enabled()
-        raise salobj.ExpectedError("Not implemented yet.")
-
-    async def do_runDimmManual(self, data):
-        """Manually begin the DIMM control loop.
 
         Parameters
         ----------
@@ -587,98 +480,6 @@ class DIMMCSC(salobj.ConfigurableCsc):
 
     async def do_setAmebaMode(self, data):
         """Set ameba mode (off, auto, or manual) through tt-master.
-
-        Parameters
-        ----------
-        data : A SALOBJ data object
-            Contains the data as defined in the SAL XML file.
-        """
-        self.assert_enabled()
-        raise salobj.ExpectedError("Not implemented yet.")
-
-    async def do_setManualTarget(self, data):
-        """Set up a manual target in the AMEBA module.
-
-        Parameters
-        ----------
-        data : A SALOBJ data object
-            Contains the data as defined in the SAL XML file.
-        """
-        self.assert_enabled()
-        raise salobj.ExpectedError("Not implemented yet.")
-
-    async def do_setProgramStatus(self, data):
-        """Send command(s) to change the state of program(s) on the DIMM.
-
-        For each item, use a value from the ProgramControl enumeration to
-        specify the desired action, or NoAction to leave the state of the
-        program as it was.
-
-        Parameters
-        ----------
-        data : A SALOBJ data object
-            Contains the data as defined in the SAL XML file.
-        """
-        self.assert_enabled()
-        raise salobj.ExpectedError("Not implemented yet.")
-
-    async def do_setSky(self, data):
-        """Send sky sensor data to the DIMM.
-
-        Parameters
-        ----------
-        data : A SALOBJ data object
-            Contains the data as defined in the SAL XML file.
-        """
-        self.assert_enabled()
-        raise salobj.ExpectedError("Not implemented yet.")
-
-    async def do_setWeather(self, data):
-        """Send weather data to the DIMM.
-
-        Parameters
-        ----------
-        data : A SALOBJ data object
-            Contains the data as defined in the SAL XML file.
-        """
-        self.assert_enabled()
-        raise salobj.ExpectedError("Not implemented yet.")
-
-    async def do_stop(self, data):
-        """Discontinue tracking without otherwise moving the telescope.
-
-        Parameters
-        ----------
-        data : A SALOBJ data object
-            Contains the data as defined in the SAL XML file.
-        """
-        self.assert_enabled()
-        raise salobj.ExpectedError("Not implemented yet.")
-
-    async def do_stopDimmManual(self, data):
-        """Manually stop the DIMM control loop.
-
-        Parameters
-        ----------
-        data : A SALOBJ data object
-            Contains the data as defined in the SAL XML file.
-        """
-        self.assert_enabled()
-        raise salobj.ExpectedError("Not implemented yet.")
-
-    async def do_offsetFocus(self, data):
-        """Apply an offset to the focuser position.
-
-        Parameters
-        ----------
-        data : A SALOBJ data object
-            Contains the data as defined in the SAL XML file.
-        """
-        self.assert_enabled()
-        raise salobj.ExpectedError("Not implemented yet.")
-
-    async def do_offsetPointing(self, data):
-        """Apply an offset to the telescope's pointing.
 
         Parameters
         ----------
