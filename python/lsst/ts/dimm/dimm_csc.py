@@ -430,6 +430,28 @@ class DIMMCSC(salobj.ConfigurableCsc):
         self.assert_enabled()
         raise salobj.ExpectedError("Not implemented yet.")
 
+    async def do_moveDome(self, data):
+        """Operate the DIMM dome.
+
+        Parameters
+        ----------
+        data : `salobj.type_hints.BaseDdsDataType`
+            Contains the data as defined in the SAL XML file.
+        """
+        self.assert_enabled()
+        raise salobj.ExpectedError("Not implemented yet.")
+
+    async def do_setAmebaMode(self, data):
+        """Change operation mode of the ameba subsystem.
+
+        Parameters
+        ----------
+        data : `salobj.type_hints.BaseDdsDataType`
+            Contains the data as defined in the SAL XML file.
+        """
+        self.assert_enabled()
+        raise salobj.ExpectedError("Not implemented yet.")
+
     async def fault(self, code, report, traceback=""):
         self.telemetry_loop_running = False
         self.seeing_loop_running = False
