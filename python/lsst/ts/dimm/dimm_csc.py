@@ -23,7 +23,7 @@ import asyncio
 import traceback
 import types
 
-from lsst.ts import salobj
+from lsst.ts import salobj, utils
 from lsst.ts.dimm import controllers
 
 from . import __version__
@@ -99,6 +99,11 @@ class DIMMCSC(salobj.ConfigurableCsc):
             config_dir=config_dir,
             initial_state=initial_state,
             simulation_mode=simulation_mode,
+            extra_commands={
+                # DM-48873 Remove after Cycle 39 XML is phased out.
+                "moveDome",
+                "setAmebaMode",
+            },
         )
 
         # A remote to weather station data
@@ -127,7 +132,7 @@ class DIMMCSC(salobj.ConfigurableCsc):
         self.telemetry_loop_task = None
 
         self.seeing_loop_running = False
-        self.seeing_loop_task = None
+        self.seeing_loop_task = utils.make_done_future()
 
         self.csc_running = True
         self.measurement_validity = None
@@ -205,14 +210,13 @@ class DIMMCSC(salobj.ConfigurableCsc):
         try:
             await self.controller.start()
         except Exception:
-            self.log.exception(
-                "Failed starting the controller.", report="DIMM reported error state."
-            )
+            self.log.exception("Failed starting the controller.")
             await self.fault(code=CONTROLLER_START_FAILED)
             raise RuntimeError(
                 "Failed to start controller. Check configuration and make sure DIMM"
                 "controller is alive and reachable by the CSC."
             )
+
         self.telemetry_loop_task = asyncio.create_task(self.telemetry_loop())
         self.seeing_loop_task = asyncio.create_task(self.seeing_loop())
 
@@ -323,6 +327,7 @@ class DIMMCSC(salobj.ConfigurableCsc):
                 self.log.debug(f"Controller running? {self.controller_running}")
 
                 state_topic = self.prepare_status_telemetry(state)
+                state_topic = self.clean_topic("tel_status", state_topic)
                 try:
                     await self.tel_status.set_write(**state_topic)
                 except ValueError:
@@ -372,6 +377,9 @@ class DIMMCSC(salobj.ConfigurableCsc):
                         converted_data["timestamp"] + self.measurement_validity
                     )
                     converted_data["expiresIn"] = self.measurement_validity
+                    converted_data = self.clean_topic(
+                        "evt_dimmMeasurement", converted_data
+                    )
 
                     await self.evt_dimmMeasurement.set_write(**converted_data)
                 await asyncio.sleep(self.heartbeat_interval)
@@ -386,12 +394,63 @@ class DIMMCSC(salobj.ConfigurableCsc):
                 )
                 break
 
+    def clean_topic(self, topic_name, kwargs):
+        """Adjusts the state_topic dictionary to conform with the XML schema.
+
+        Adds the missing keys from the state_topic dictionary, setting
+        those to the default of the correct data type. Removes keys from
+        the dictionary that are not part of the schema.
+
+        TODO: DM-48873 remove this function and all calls to it.
+
+        Parameters
+        ----------
+        topic_name : str
+            The name of the topic for the SAL schema to apply.
+
+        kwargs : dict[str, Any]
+            The dictionary to be cleaned up.
+
+        Returns
+        -------
+        dict[str, Any]
+            The cleaned dictionary.
+        """
+        # Get all the fields for either DDS or Kafka salobj (h/t Wouter)
+        schema = {}
+        if hasattr(self.salinfo, "metadata"):
+            schema = set(self.salinfo.metadata.topic_info[topic_name].field_info.keys())
+        elif hasattr(self.salinfo, "component_info"):
+            schema = set(self.salinfo.component_info.topics[topic_name].fields.keys())
+        base_attributes = {
+            "private_identity",
+            "private_origin",
+            "private_rcvStamp",
+            "private_revCode",
+            "private_seqNum",
+            "private_sndStamp",
+            "salIndex",
+        }
+        schema -= base_attributes
+
+        # Add missing keys with default values
+        for key in schema:
+            if key not in kwargs:
+                kwargs[key] = 0  # Default value of zero
+
+        # Remove keys that are not in the schema
+        keys_to_remove = [key for key in kwargs if key not in schema]
+        for key in keys_to_remove:
+            del kwargs[key]
+
+        return kwargs
+
     async def do_gotoAltAz(self, data):
         """Move to Alt/AZ position.
 
         Parameters
         ----------
-        data : A SALOBJ data object
+        data : `salobj.type_hints.BaseDdsDataType`
             Contains the data as defined in the SAL XML file.
         """
         self.assert_enabled()
@@ -402,7 +461,29 @@ class DIMMCSC(salobj.ConfigurableCsc):
 
         Parameters
         ----------
-        data : A SALOBJ data object
+        data : `salobj.type_hints.BaseDdsDataType`
+            Contains the data as defined in the SAL XML file.
+        """
+        self.assert_enabled()
+        raise salobj.ExpectedError("Not implemented yet.")
+
+    async def do_moveDome(self, data):
+        """Manually move the second dome side to the requested position.
+
+        Parameters
+        ----------
+        data : `salobj.type_hints.BaseDdsDataType`
+            Contains the data as defined in the SAL XML file.
+        """
+        self.assert_enabled()
+        raise salobj.ExpectedError("Not implemented yet.")
+
+    async def do_setAmebaMode(self, data):
+        """Set ameba mode (off, auto, or manual) through tt-master.
+
+        Parameters
+        ----------
+        data : `salobj.type_hints.BaseDdsDataType`
             Contains the data as defined in the SAL XML file.
         """
         self.assert_enabled()
@@ -413,7 +494,7 @@ class DIMMCSC(salobj.ConfigurableCsc):
 
         Parameters
         ----------
-        data : A SALOBJ data object
+        data : `salobj.type_hints.BaseDdsDataType`
             Contains the data as defined in the SAL XML file.
         """
         self.assert_enabled()
@@ -424,7 +505,7 @@ class DIMMCSC(salobj.ConfigurableCsc):
 
         Parameters
         ----------
-        data : A SALOBJ data object
+        data : `salobj.type_hints.BaseDdsDataType`
             Contains the data as defined in the SAL XML file.
         """
         self.assert_enabled()
@@ -447,11 +528,14 @@ class DIMMCSC(salobj.ConfigurableCsc):
         """
         while self.csc_running:
             if self.summary_state == salobj.State.ENABLED:
-                if self.seeing_loop_task.done():
+                if self.seeing_loop_task is not None and self.seeing_loop_task.done():
                     error_report = "Seeing loop died while in enable state."
                     await self.fault(code=SEEING_LOOP_DONE, report=error_report)
 
-                if self.telemetry_loop_task.done():
+                if (
+                    self.telemetry_loop_task is not None
+                    and self.telemetry_loop_task.done()
+                ):
                     error_report = "Telemetry loop died while in enable state."
                     await self.fault(code=TELEMETRY_LOOP_DONE, report=error_report)
 
