@@ -9,6 +9,7 @@ v0.9.3
 
 * Add placeholders for new commands.
 * Minor fixes to docstrings.
+* Fixed issue passing ``report`` to ``self.log.exception`` instead of ``self.fault``.
 
 v0.9.2
 ------

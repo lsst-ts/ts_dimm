@@ -205,10 +205,10 @@ class DIMMCSC(salobj.ConfigurableCsc):
         try:
             await self.controller.start()
         except Exception:
-            self.log.exception(
-                "Failed starting the controller.", report="DIMM reported error state."
+            self.log.exception("Failed starting the controller.")
+            await self.fault(
+                code=CONTROLLER_START_FAILED, report="DIMM reported error state."
             )
-            await self.fault(code=CONTROLLER_START_FAILED)
             raise RuntimeError(
                 "Failed to start controller. Check configuration and make sure DIMM"
                 "controller is alive and reachable by the CSC."
