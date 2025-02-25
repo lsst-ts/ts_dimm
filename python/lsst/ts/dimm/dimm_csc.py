@@ -391,7 +391,7 @@ class DIMMCSC(salobj.ConfigurableCsc):
 
         Parameters
         ----------
-        data : A SALOBJ data object
+        data : `salobj.type_hints.BaseDdsDataType`
             Contains the data as defined in the SAL XML file.
         """
         self.assert_enabled()
@@ -402,7 +402,7 @@ class DIMMCSC(salobj.ConfigurableCsc):
 
         Parameters
         ----------
-        data : A SALOBJ data object
+        data : `salobj.type_hints.BaseDdsDataType`
             Contains the data as defined in the SAL XML file.
         """
         self.assert_enabled()
@@ -413,7 +413,7 @@ class DIMMCSC(salobj.ConfigurableCsc):
 
         Parameters
         ----------
-        data : A SALOBJ data object
+        data : `salobj.type_hints.BaseDdsDataType`
             Contains the data as defined in the SAL XML file.
         """
         self.assert_enabled()
@@ -424,7 +424,7 @@ class DIMMCSC(salobj.ConfigurableCsc):
 
         Parameters
         ----------
-        data : A SALOBJ data object
+        data : `salobj.type_hints.BaseDdsDataType`
             Contains the data as defined in the SAL XML file.
         """
         self.assert_enabled()
