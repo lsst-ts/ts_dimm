@@ -4,6 +4,12 @@
 Version History
 ===============
 
+v0.9.3
+------
+
+* Add placeholders for new commands.
+* Minor fixes to docstrings.
+
 v0.9.2
 ------
 
