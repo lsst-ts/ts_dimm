@@ -757,12 +757,13 @@ properties:
         """Sends information about ambient temperature (C) to the DIMM."""
         if data.numChannels > 0:
             await self.run_command(
-                "SET", f"WEATHER.TEMP_AMB={mean(data.temperature[:data.numChannels])}"
+                "SET",
+                f"WEATHER.TEMP_AMB={mean(data.temperatureItem[:data.numChannels])}",
             )
 
     async def humidity_callback(self, data):
         """Sends information about humidity (%) to the DIMM."""
-        await self.run_command("SET", f"WEATHER.RH={data.relativeHumidity}")
+        await self.run_command("SET", f"WEATHER.RH={data.relativeHumidityItem}")
 
     async def pressure_callback(self, data):
         """Sends information about pressure (mBar) to the DIMM."""
@@ -771,7 +772,7 @@ properties:
             # 100.
             await self.run_command(
                 "SET",
-                f"WEATHER.PRESSURE={mean(data.pressure[:data.numChannels])/100.0}",
+                f"WEATHER.PRESSURE={mean(data.pressureItem[:data.numChannels])/100.0}",
             )
 
     async def air_flow_callback(self, data):
@@ -821,18 +822,18 @@ properties:
 
         temperature_data = self.ws_remote.tel_temperature.DataType()
         temperature_data.numChannels = 1
-        temperature_data.temperature[0] = 0.0
+        temperature_data.temperatureItem[0] = 0.0
         await self.temperature_callback(
             temperature_data,
         )
         await self.humidity_callback(
             self.ws_remote.tel_relativeHumidity.DataType(
-                relativeHumidity=self.mock_dimm.config.HumLow * 0.9,
+                relativeHumidityItem=self.mock_dimm.config.HumLow * 0.9,
             )
         )
         pressure_data = self.ws_remote.tel_pressure.DataType()
         pressure_data.numChannels = 1
-        pressure_data.pressure[0] = 0.5
+        pressure_data.pressureItem[0] = 0.5
         await self.pressure_callback(
             pressure_data,
         )

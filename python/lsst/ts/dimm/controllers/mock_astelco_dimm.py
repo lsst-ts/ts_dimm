@@ -70,7 +70,7 @@ ScopeDataRange = types.SimpleNamespace(
 # The values for seeing are mean and std dev for a Gaussian distribution
 # the others are min and max for a uniform distribution
 DIMMDataRange = types.SimpleNamespace(
-    seeing=(0.5, 2.5),  # mean, std dev
+    seeing=(1.0, 0.2),  # mean, std dev
     flux_left=(10000, 20000),
     flux_right=(10000, 20000),
     flux_rms_left=(10000, 20000),
@@ -411,6 +411,7 @@ class MockAstelcoDIMM(tcpip.OneClientServer):
             port=port,
             log=log,
             connect_callback=self.connect_callback,
+            terminator=TERMINATOR,
         )
 
     async def auto_loop(self):
@@ -487,7 +488,7 @@ class MockAstelcoDIMM(tcpip.OneClientServer):
             and self.sky.temp <= self.config.TempStart
         )
 
-    def connect_callback(self, server):
+    async def connect_callback(self, server):
         if self.connected and self.command_loop_task.done():
             self.command_loop_task = asyncio.create_task(self.command_loop())
 
@@ -501,9 +502,9 @@ class MockAstelcoDIMM(tcpip.OneClientServer):
         cmdid_regex = re.compile(r"(\d+) *(.*)")
         try:
             while self.connected:
-                cmd_bytes = await self.reader.readuntil(TERMINATOR)
-                self.log.debug(f"Read {cmd_bytes!r}")
-                cmd_str = cmd_bytes.decode().strip()
+                cmd_str = await self.read_str()
+                cmd_str = cmd_str.strip()
+                self.log.debug(f"Read {cmd_str!r}")
 
                 cmdid_match = cmdid_regex.match(cmd_str)
                 if cmdid_match is None:
@@ -776,10 +777,7 @@ class MockAstelcoDIMM(tcpip.OneClientServer):
         """
         if not self.connected:
             raise RuntimeError("Not connected")
-        msg_bytes = msg.encode() + TERMINATOR
-        self.log.debug(f"Writing {msg_bytes!r}")
-        self.writer.write(msg_bytes)
-        await self.writer.drain()
+        await self.write_str(msg)
 
     def _hierarchical_get_attr(self, attr_names):
         """Get a variable from a hierarchical list of attr names.
