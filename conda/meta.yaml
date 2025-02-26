@@ -15,9 +15,8 @@ build:
 test:
   requires:
     - sqlalchemy
-    - ts-conda-build =0.3
-    - ts-dds
-    - ts-idl {{ idl_version }}
+    - ts-conda-build =0.4
+    - ts-xml {{ xml_conda_version }}
     - ts-salobj {{ salobj_version }}
     - ts-tcpip
   source_files:
@@ -27,7 +26,7 @@ test:
     - setup.cfg
     - tests
   commands:
-    - py.test
+    - pytest
 
 requirements:
   host:
@@ -39,12 +38,12 @@ requirements:
     - python {{ python }}
     - setuptools
     - setuptools_scm
-    - ts-conda-build =0.3
+    - ts-conda-build =0.4
   run:
     - python {{ python }}
     - setuptools
     - setuptools_scm
     - sqlalchemy
-    - ts-idl
+    - ts-xml
     - ts-salobj
     - ts-tcpip
