@@ -233,9 +233,10 @@ class AmebaModule(BaseToplevelModule):
     current = AmebaCurrentSubmodule()
     mode = AmebaMode.AUTO
     state = AmebaState.INACTIVE
-    sun_alt_condition = 0.0
-    start_time = 0.0
-    finish_time = 0.0
+    sun_alt = 45.0
+    condition = 7
+    start_time = 946684768.0  # 2000-01-01T00:00:00
+    finish_time = 946684768.0
     _settable_fields = {"mode"}
 
 
@@ -459,8 +460,6 @@ class MockAstelcoDIMM(tcpip.OneClientServer):
                 self.dimm.strehl_right = random.uniform(*DIMMDataRange.strehl_right)
                 self.dimm.timestamp = time.time()
                 self.auto_measurement_event.set()
-        except asyncio.CancelledError:
-            pass
         except Exception:
             self.log.exception("Automatic loop failed")
         finally:
@@ -643,6 +642,10 @@ class MockAstelcoDIMM(tcpip.OneClientServer):
                 self.auto_loop_task = asyncio.create_task(self.auto_loop())
         else:
             self.auto_loop_task.cancel()
+            try:
+                await self.auto_loop_task
+            except asyncio.CancelledError:
+                pass  # expected result
 
     def get_field(self, varname):
         """Get the value of a field."""
