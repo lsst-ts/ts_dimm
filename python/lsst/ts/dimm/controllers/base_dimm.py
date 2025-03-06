@@ -20,6 +20,7 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import abc
+from enum import IntEnum
 
 __all__ = ["BaseDIMM", "DIMMStatus"]
 
@@ -30,6 +31,12 @@ DIMMStatus = {
     "RUNNING": 1 << 2,
     "ERROR": 1 << 3,
 }
+
+
+class AutomationMode(IntEnum):
+    OFF = 0
+    AUTO = 1
+    MANUAL = 2
 
 
 class BaseDIMM(abc.ABC):
@@ -49,6 +56,14 @@ class BaseDIMM(abc.ABC):
             "altitude": 0.0,
             "azimuth": 0.0,
             "hrnum": 0,
+        }
+        self.ameba = {
+            "mode": -1,
+            "state": -1,
+            "sunAltitude": float("nan"),
+            "condition": -1,
+            "startTime": 0,
+            "finishTime": 0,
         }
         self.log = log.getChild(type(self).__name__)
         self.simulate = simulate
@@ -99,6 +114,26 @@ class BaseDIMM(abc.ABC):
 
         """
         return self.status
+
+    async def get_ameba(self):
+        """Return the AMEBA telemetry.
+
+        Returns
+        -------
+        ameba : dict
+            Dictionary with AMEBA status.
+        """
+        return self.ameba
+
+    async def set_automation_mode(self, mode: AutomationMode) -> None:
+        """Sets the DIMM to off (0), automatic (1), or manual (2) operation.
+
+        Parameter
+        ---------
+        mode : AutomationMode
+            Desired DIMM operating mode.
+        """
+        raise NotImplementedError()
 
     @abc.abstractmethod
     async def get_measurement(self):

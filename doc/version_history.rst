@@ -4,6 +4,12 @@
 Version History
 ===============
 
+v0.9.4
+------
+
+* Implemented the `setAmebaMode` CSC command.
+* Implemented the `ameba` telemetry topic.
+
 v0.9.3
 ------
 

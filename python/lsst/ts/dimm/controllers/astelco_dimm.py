@@ -29,10 +29,10 @@ from statistics import mean
 
 import yaml
 from lsst.ts.tcpip import LOCAL_HOST, close_stream_writer
-from lsst.ts.utils import index_generator, make_done_future
+from lsst.ts.utils import index_generator, make_done_future, tai_from_utc
 
 from .astelco_enums import TERMINATOR, RainState, SkyStatus
-from .base_dimm import BaseDIMM, DIMMStatus
+from .base_dimm import AutomationMode, BaseDIMM, DIMMStatus
 from .mock_astelco_dimm import MockAstelcoDIMM
 
 # Interval between status requests (seconds)
@@ -365,19 +365,58 @@ properties:
                     self.status["status"] = DIMMStatus["RUNNING"]
 
                 await asyncio.sleep(STATUS_INTERVAL)
-        except asyncio.CancelledError:
-            pass
         except Exception:
             self.log.exception("Status loop failed")
             self.status["status"] = DIMMStatus["ERROR"]
         finally:
             self.log.debug("Status loop ends")
 
+    async def ameba_loop(self):
+        """Monitor DIMM status and update `self.status` dictionary
+        information.
+        """
+        self.log.debug("AMEBA loop begins")
+        try:
+            while self.connected:
+                status_cmd = await self.run_command(
+                    "GET",
+                    "AMEBA.MODE;AMEBA.STATE;AMEBA.SUN_ALT;AMEBA.CONDITION;AMEBA.START_TIME;AMEBA.FINISH_TIME",
+                )
+                self.ameba["mode"] = status_cmd.get_int("AMEBA.MODE", bad_value=-1)
+                self.ameba["state"] = status_cmd.get_int("AMEBA.STATE", bad_value=-1)
+                self.ameba["sunAltitude"] = status_cmd.get_float("AMEBA.SUN_ALT")
+                self.ameba["condition"] = status_cmd.get_int(
+                    "AMEBA.CONDITION", bad_value=-1
+                )
+                self.ameba["startTime"] = status_cmd.get_float("AMEBA.START_TIME")
+                self.ameba["finishTime"] = status_cmd.get_float("AMEBA.FINISH_TIME")
+                if not math.isnan(self.ameba["startTime"]):
+                    self.ameba["startTime"] = tai_from_utc(self.ameba["startTime"])
+                if not math.isnan(self.ameba["finishTime"]):
+                    self.ameba["finishTime"] = tai_from_utc(self.ameba["finishTime"])
+
+                await asyncio.sleep(STATUS_INTERVAL)
+        except Exception:
+            self.log.exception("AMEBA loop failed")
+            self.status["status"] = DIMMStatus["ERROR"]
+        finally:
+            self.log.debug("AMEBA loop ends")
+
     async def connect(self):
         """Connect to the DIMM controller's TCP/IP."""
         try:
             self.reply_loop_task.cancel()
             self.status_loop_task.cancel()
+
+            try:
+                await self.reply_loop_task
+            except asyncio.CancelledError:
+                pass  # expected result
+
+            try:
+                await self.status_loop_task
+            except asyncio.CancelledError:
+                pass  # expected result
 
             if self.connected:
                 self.log.error("Already connected")
@@ -439,8 +478,13 @@ properties:
                 # just needs it sent once.
                 await self.report_good_mock_weather()
 
-            # Start status loop
-            self.status_loop_task = asyncio.create_task(self.status_loop())
+            # Start status and ameba loop. Wrapping `gather`
+            # in `create_task` avoids an error when the
+            # GatheringFuture is ignored.
+            self.status_loop_task = asyncio.gather(
+                self.status_loop(),
+                self.ameba_loop(),
+            )
 
         except Exception:
             self.log.exception("Error connecting to DIMM controller")
@@ -454,6 +498,17 @@ properties:
         self.log.debug("Disconnect")
         self.reply_loop_task.cancel()
         self.status_loop_task.cancel()
+
+        try:
+            await self.reply_loop_task
+        except asyncio.CancelledError:
+            pass  # expected result
+
+        try:
+            await self.status_loop_task
+        except asyncio.CancelledError:
+            pass  # expected result
+
         if self.connected:
             try:
                 await self.write_cmdstr("DISCONNECT")
@@ -463,7 +518,18 @@ properties:
         self.reader = None
         self.writer = None
         if writer is not None:
+            self.log.info("Closing stream writer.")
             await close_stream_writer(writer)
+
+    async def set_automation_mode(self, mode: AutomationMode) -> None:
+        """Sets the DIMM to off (0), automatic (1), or manual (2) operation.
+
+        Parameter
+        ---------
+        mode : AutomationMode
+            Desired DIMM operating mode.
+        """
+        await self.run_command("SET", f"AMEBA.MODE={mode.value}")
 
     async def get_measurement(self):
         """Wait and return new seeing measurements.
@@ -588,8 +654,6 @@ properties:
                 else:
                     self.log.warning(f"Ignoring unrecognized reply {reply!r}")
 
-        except asyncio.CancelledError:
-            pass
         except (asyncio.IncompleteReadError, ConnectionResetError):
             self.log.warning("Connection lost; reply loop ending")
         except Exception:

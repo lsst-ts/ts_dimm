@@ -297,6 +297,7 @@ class MockAstelcoDIMMTestCase(unittest.IsolatedAsyncioTestCase):
         await self.authenticate()
 
         for arg in (
+            "AMEBA.MODE=2",
             'AMEBA.MANUAL.NAME="new name"',
             "AMEBA.MANUAL.RA=1.1;AMEBA.MANUAL.DEC=2.2",
             "AMEBA.MANUAL.BRIGHTNESS=3.3",
