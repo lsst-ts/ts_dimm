@@ -4,6 +4,11 @@
 Version History
 ===============
 
+v0.9.5
+------
+
+* Changed xml_conda_version to xml_version in recipe.
+
 v0.9.4
 ------
 
