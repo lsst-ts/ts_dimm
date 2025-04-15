@@ -383,9 +383,9 @@ class MockAstelcoDIMM(tcpip.OneClientServer):
         self.sky = SkyModule()
         self.auto_loop_task = utils.make_done_future()
         # Slew time between targets (seconds).
-        self.slew_duration = 1
+        self.slew_duration = 5
         # Measurement interval (seconds).
-        self.measurement_duration = 1
+        self.measurement_duration = 10
         # Event that is set every time a new measurement is made in auto mode.
         # Intended for unit tests, which may clear this event and then
         # wait for it.
@@ -434,32 +434,13 @@ class MockAstelcoDIMM(tcpip.OneClientServer):
             self.dome.power_state = PowerState.POWERED_UP
             self.scope.power_state = PowerState.POWERED_UP
             self.dome.position = self.scope.az
+            await self.set_measurement()
+            set_measurement_task = asyncio.create_task(self.set_measurement())
             while True:
-                # Set scope target and pause pretending to slew
-                self.ameba.state = AmebaState.SLEWING
-                self.scope.motion_state = ScopeMotionState.SLEWING
-                self.scope.ra = random.uniform(*ScopeDataRange.ra)
-                self.scope.dec = random.uniform(*ScopeDataRange.dec)
-                self.scope.az = random.uniform(*ScopeDataRange.az)
-                self.scope.alt = random.uniform(*ScopeDataRange.alt)
-
-                await asyncio.sleep(self.slew_duration)
-                self.ameba.state = AmebaState.MONITORING
-                self.scope.motion_state = ScopeMotionState.TRACKING
-
-                # Pause for measurement and set fake measurement data.
-                await asyncio.sleep(self.measurement_duration)
-                self.dimm.seeing = random.normalvariate(*DIMMDataRange.seeing)
-                self.dimm.seeing_lowfreq = self.dimm.seeing * 0.9  # arbitrary
-                self.dimm.flux_left = random.uniform(*DIMMDataRange.flux_left)
-                self.dimm.flux_right = random.uniform(*DIMMDataRange.flux_right)
-                self.dimm.flux_rms_left = random.uniform(*DIMMDataRange.flux_rms_left)
-                self.dimm.flux_rms_right = random.uniform(*DIMMDataRange.flux_rms_right)
-                self.dimm.airmass = 1 / math.cos(math.radians(self.scope.alt))
-                self.dimm.strehl_left = random.uniform(*DIMMDataRange.strehl_left)
-                self.dimm.strehl_right = random.uniform(*DIMMDataRange.strehl_right)
-                self.dimm.timestamp = time.time()
                 self.auto_measurement_event.set()
+                await asyncio.sleep(1)
+                if set_measurement_task.done():
+                    set_measurement_task = asyncio.create_task(self.set_measurement())
         except Exception:
             self.log.exception("Automatic loop failed")
         finally:
@@ -472,6 +453,37 @@ class MockAstelcoDIMM(tcpip.OneClientServer):
             self.scope.alt = ScopeParkedPosition.alt
             self.dome.power_state = PowerState.PARKED
             self.scope.power_state = PowerState.PARKED
+
+    async def set_measurement(self):
+        """Set measurement values."""
+
+        self.log.info("Set measurement started.")
+        # Set scope target and pause pretending to slew
+        self.ameba.state = AmebaState.SLEWING
+        self.scope.motion_state = ScopeMotionState.SLEWING
+        self.scope.ra = random.uniform(*ScopeDataRange.ra)
+        self.scope.dec = random.uniform(*ScopeDataRange.dec)
+        self.scope.az = random.uniform(*ScopeDataRange.az)
+        self.scope.alt = random.uniform(*ScopeDataRange.alt)
+
+        await asyncio.sleep(self.slew_duration)
+        self.ameba.state = AmebaState.MONITORING
+        self.scope.motion_state = ScopeMotionState.TRACKING
+
+        # Pause for measurement and set fake measurement data.
+        await asyncio.sleep(self.measurement_duration)
+        self.dimm.seeing = random.normalvariate(*DIMMDataRange.seeing)
+        self.dimm.seeing_lowfreq = self.dimm.seeing * 0.9  # arbitrary
+        self.dimm.flux_left = random.uniform(*DIMMDataRange.flux_left)
+        self.dimm.flux_right = random.uniform(*DIMMDataRange.flux_right)
+        self.dimm.flux_rms_left = random.uniform(*DIMMDataRange.flux_rms_left)
+        self.dimm.flux_rms_right = random.uniform(*DIMMDataRange.flux_rms_right)
+        self.dimm.airmass = 1 / math.cos(math.radians(self.scope.alt))
+        self.dimm.strehl_left = random.uniform(*DIMMDataRange.strehl_left)
+        self.dimm.strehl_right = random.uniform(*DIMMDataRange.strehl_right)
+        self.dimm.timestamp = time.time()
+
+        self.log.info("Set measurement completed.")
 
     def can_open(self):
         """Do the weather conditions permit starting operation?
