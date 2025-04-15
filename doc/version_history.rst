@@ -4,6 +4,13 @@
 Version History
 ===============
 
+v0.9.5
+------
+
+* Updated ``MockAstelcoDIMM`` to mimick the behavior of the actual DIMM that sends duplicated data when requested.
+* Made some minor improvement to ``DIMMCSC.clean_topic``.
+* Included a check that no duplicated data is published by the CSC.
+
 v0.9.4
 ------
 
