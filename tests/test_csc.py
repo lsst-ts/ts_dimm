@@ -28,7 +28,7 @@ from lsst.ts.xml.enums.DIMM import AmebaMode
 
 TEST_CONFIG_DIR = pathlib.Path(__file__).parents[1].joinpath("tests", "data", "config")
 SHORT_TIMEOUT = 5
-MEAS_TIMEOUT = 10
+MEAS_TIMEOUT = 20
 
 
 class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
@@ -80,8 +80,8 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
             await salobj.set_summary_state(
                 remote=self.remote, state=salobj.State.ENABLED
             )
-            data = await self.remote.evt_dimmMeasurement.next(
-                flush=True, timeout=MEAS_TIMEOUT
+            data = await self.assert_next_sample(
+                self.remote.evt_dimmMeasurement, flush=True, timeout=MEAS_TIMEOUT
             )
             assert data.fwhm > 0.1
             assert data.fluxL > 1000
@@ -94,6 +94,12 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
             # Make sure most commands have been purged from running_commands;
             # it may have a status command.
             assert len(self.csc.controller.running_commands) <= 1
+
+            data2 = await self.assert_next_sample(
+                self.remote.evt_dimmMeasurement, flush=True, timeout=MEAS_TIMEOUT
+            )
+
+            assert data2.fwhm != data.fwhm
 
     async def test_astelco_dimm_fault_on_disconnect(self):
         async with self.make_csc(

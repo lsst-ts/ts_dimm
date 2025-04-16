@@ -421,34 +421,17 @@ class DIMMCSC(salobj.ConfigurableCsc):
         dict[str, Any]
             The cleaned dictionary.
         """
-        # Get all the fields for either DDS or Kafka salobj (h/t Wouter)
-        schema = {}
-        if hasattr(self.salinfo, "metadata"):
-            schema = set(self.salinfo.metadata.topic_info[topic_name].field_info.keys())
-        elif hasattr(self.salinfo, "component_info"):
-            schema = set(self.salinfo.component_info.topics[topic_name].fields.keys())
-        base_attributes = {
-            "private_identity",
-            "private_origin",
-            "private_rcvStamp",
-            "private_revCode",
-            "private_seqNum",
-            "private_sndStamp",
-            "salIndex",
-        }
-        schema -= base_attributes
+        topic_attributes = (
+            set(self.salinfo.metadata.topic_info[topic_name].field_info.keys())
+            if hasattr(self.salinfo, "metadata")
+            else set(self.salinfo.component_info.topics[topic_name].fields.keys())
+        )
 
-        # Add missing keys with default values
-        for key in schema:
-            if key not in kwargs:
-                kwargs[key] = 0  # Default value of zero
+        cleaned_dict = dict(
+            [(key, value) for key, value in kwargs.items() if key in topic_attributes]
+        )
 
-        # Remove keys that are not in the schema
-        keys_to_remove = [key for key in kwargs if key not in schema]
-        for key in keys_to_remove:
-            del kwargs[key]
-
-        return kwargs
+        return cleaned_dict
 
     async def do_gotoAltAz(self, data):
         """Move to Alt/AZ position.
