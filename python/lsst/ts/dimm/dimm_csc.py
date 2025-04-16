@@ -28,7 +28,7 @@ from lsst.ts.dimm import controllers
 
 from . import __version__
 from .config_schema import CONFIG_SCHEMA
-from .controllers.base_dimm import DIMMStatus
+from .controllers.base_dimm import AutomationMode, DIMMStatus
 from .utils.conversion import (
     convert_dimm_measurement_data,
     convert_to_float,
@@ -237,11 +237,6 @@ class DIMMCSC(salobj.ConfigurableCsc):
         self.telemetry_loop_running = False
         self.seeing_loop_running = False
 
-        try:
-            await self.controller.stop()
-        except Exception:
-            self.log.exception("Error in begin_disable. Continuing...")
-
         await super().begin_disable(id_data)
 
     async def end_disable(self, id_data):
@@ -266,6 +261,11 @@ class DIMMCSC(salobj.ConfigurableCsc):
             await self.wait_loop(self.seeing_loop_task)
         except Exception:
             self.log.exception("Error trying to stop the seeing loop. Continuing.")
+
+        try:
+            await self.controller.stop()
+        except Exception:
+            self.log.exception("Error in controller stop. Continuing...")
 
         await super().end_disable(id_data)
 
@@ -340,9 +340,14 @@ class DIMMCSC(salobj.ConfigurableCsc):
                     )
                     break
 
+                # TODO: DM-48873 Remove the `hasattr` condition when cycle 39
+                # XML is no longer in service.
+                if hasattr(self, "tel_ameba"):
+                    self.log.debug("Collecting AMEBA state.")
+                    ameba_topic = await self.controller.get_ameba()
+                    await self.tel_ameba.set_write(**ameba_topic)
+
                 await asyncio.sleep(self.heartbeat_interval)
-        except asyncio.CancelledError:
-            pass
         except Exception:
             self.log.exception("Error in telemetry loop.")
             await self.fault(
@@ -416,34 +421,17 @@ class DIMMCSC(salobj.ConfigurableCsc):
         dict[str, Any]
             The cleaned dictionary.
         """
-        # Get all the fields for either DDS or Kafka salobj (h/t Wouter)
-        schema = {}
-        if hasattr(self.salinfo, "metadata"):
-            schema = set(self.salinfo.metadata.topic_info[topic_name].field_info.keys())
-        elif hasattr(self.salinfo, "component_info"):
-            schema = set(self.salinfo.component_info.topics[topic_name].fields.keys())
-        base_attributes = {
-            "private_identity",
-            "private_origin",
-            "private_rcvStamp",
-            "private_revCode",
-            "private_seqNum",
-            "private_sndStamp",
-            "salIndex",
-        }
-        schema -= base_attributes
+        topic_attributes = (
+            set(self.salinfo.metadata.topic_info[topic_name].field_info.keys())
+            if hasattr(self.salinfo, "metadata")
+            else set(self.salinfo.component_info.topics[topic_name].fields.keys())
+        )
 
-        # Add missing keys with default values
-        for key in schema:
-            if key not in kwargs:
-                kwargs[key] = 0  # Default value of zero
+        cleaned_dict = dict(
+            [(key, value) for key, value in kwargs.items() if key in topic_attributes]
+        )
 
-        # Remove keys that are not in the schema
-        keys_to_remove = [key for key in kwargs if key not in schema]
-        for key in keys_to_remove:
-            del kwargs[key]
-
-        return kwargs
+        return cleaned_dict
 
     async def do_gotoAltAz(self, data):
         """Move to Alt/AZ position.
@@ -487,7 +475,8 @@ class DIMMCSC(salobj.ConfigurableCsc):
             Contains the data as defined in the SAL XML file.
         """
         self.assert_enabled()
-        raise salobj.ExpectedError("Not implemented yet.")
+        mode = AutomationMode(data.mode)
+        await self.controller.set_automation_mode(mode)
 
     async def do_changeDwellRate(self, data):
         """Change how long to sample for in seconds.

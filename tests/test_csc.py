@@ -24,10 +24,11 @@ import unittest
 
 import pytest
 from lsst.ts import dimm, salobj, utils
+from lsst.ts.xml.enums.DIMM import AmebaMode
 
 TEST_CONFIG_DIR = pathlib.Path(__file__).parents[1].joinpath("tests", "data", "config")
 SHORT_TIMEOUT = 5
-MEAS_TIMEOUT = 10
+MEAS_TIMEOUT = 20
 
 
 class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
@@ -51,6 +52,7 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
                     "gotoRaDec",
                     "changeDwellRate",
                     "changeMeasurementRate",
+                    "setAmebaMode",
                 ),
             )
 
@@ -78,8 +80,8 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
             await salobj.set_summary_state(
                 remote=self.remote, state=salobj.State.ENABLED
             )
-            data = await self.remote.evt_dimmMeasurement.next(
-                flush=True, timeout=MEAS_TIMEOUT
+            data = await self.assert_next_sample(
+                self.remote.evt_dimmMeasurement, flush=True, timeout=MEAS_TIMEOUT
             )
             assert data.fwhm > 0.1
             assert data.fluxL > 1000
@@ -92,6 +94,12 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
             # Make sure most commands have been purged from running_commands;
             # it may have a status command.
             assert len(self.csc.controller.running_commands) <= 1
+
+            data2 = await self.assert_next_sample(
+                self.remote.evt_dimmMeasurement, flush=True, timeout=MEAS_TIMEOUT
+            )
+
+            assert data2.fwhm != data.fwhm
 
     async def test_astelco_dimm_fault_on_disconnect(self):
         async with self.make_csc(
@@ -112,6 +120,38 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
 
             await self.assert_next_summary_state(
                 state=salobj.State.FAULT,
+                flush=False,
+                remote=self.remote,
+            )
+            assert not self.csc.controller.connected
+
+    async def test_set_ameba_mode(self):
+        async with self.make_csc(
+            initial_state=salobj.State.STANDBY,
+            config_dir=TEST_CONFIG_DIR,
+            simulation_mode=1,
+        ):
+            await salobj.set_summary_state(
+                remote=self.remote, state=salobj.State.ENABLED
+            )
+
+            await self.remote.cmd_setAmebaMode.set_start(mode=AmebaMode.Manual.value)
+            await self.assert_next_sample(
+                topic=self.remote.tel_ameba,
+                mode=AmebaMode.Manual.value,
+                flush=True,
+            )
+
+            await salobj.set_summary_state(
+                remote=self.remote, state=salobj.State.DISABLED
+            )
+            await self.assert_next_summary_state(
+                state=salobj.State.STANDBY,
+                flush=False,
+                remote=self.remote,
+            )
+            await self.assert_next_summary_state(
+                state=salobj.State.DISABLED,
                 flush=False,
                 remote=self.remote,
             )

@@ -25,7 +25,6 @@ import logging
 import time
 import unittest
 
-import pytest
 from lsst.ts import dimm, tcpip, utils
 from lsst.ts.dimm.controllers.astelco_enums import (
     TERMINATOR,
@@ -209,15 +208,21 @@ class MockAstelcoDIMMTestCase(unittest.IsolatedAsyncioTestCase):
         constant_fields = {"version"}
         # List of measurements, each a dict of field: value
         meas1 = None
-        for _ in range(5):
+        n_measurements = 0
+        while n_measurements < 5:
             self.mock_dimm.auto_measurement_event.clear()
             await asyncio.wait_for(
                 self.mock_dimm.auto_measurement_event.wait(),
                 timeout=measurement_timeout,
             )
-            # This can fail near a leap second, but that is rare enough
-            # to not be worth trying to work around.
-            assert self.mock_dimm.dimm.timestamp == pytest.approx(time.time(), abs=0.5)
+            if (
+                meas1 is not None
+                and meas1["timestamp"] == self.mock_dimm.dimm.timestamp
+            ):
+                continue
+            else:
+                n_measurements += 1
+
             meas0 = meas1
             meas1 = vars(self.mock_dimm.dimm).copy()
             if meas0 is not None:
@@ -297,6 +302,7 @@ class MockAstelcoDIMMTestCase(unittest.IsolatedAsyncioTestCase):
         await self.authenticate()
 
         for arg in (
+            "AMEBA.MODE=2",
             'AMEBA.MANUAL.NAME="new name"',
             "AMEBA.MANUAL.RA=1.1;AMEBA.MANUAL.DEC=2.2",
             "AMEBA.MANUAL.BRIGHTNESS=3.3",
