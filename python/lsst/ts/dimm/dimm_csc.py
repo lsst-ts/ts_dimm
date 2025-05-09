@@ -145,6 +145,11 @@ class DIMMCSC(salobj.ConfigurableCsc):
     def get_config_pkg():
         return "ts_config_ocs"
 
+    async def close_tasks(self) -> None:
+        """Stop active tasks."""
+        if self.controller is not None:
+            self.controller.unset_controller()
+
     async def configure(self, config):
         """Override superclass configure method to implement CSC
         configuration.
@@ -184,7 +189,19 @@ class DIMMCSC(salobj.ConfigurableCsc):
         config_dict = validator.validate(config)
         if not isinstance(config_dict, dict):
             raise RuntimeError(f"config {config!r} invalid: not a dict")
-        controller_config = types.SimpleNamespace(**config_dict)
+
+        def dict_to_namespace(d):
+            """Converts a nested dict[str, Any] to type SimpleNamespace"""
+            if isinstance(d, dict):
+                return types.SimpleNamespace(
+                    **{k: dict_to_namespace(v) for k, v in d.items()}
+                )
+            elif isinstance(d, list):
+                return [dict_to_namespace(item) for item in d]
+            else:
+                return d
+
+        controller_config = dict_to_namespace(config_dict)
 
         await self.controller.setup(controller_config)
 
