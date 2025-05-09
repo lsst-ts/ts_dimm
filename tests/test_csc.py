@@ -125,7 +125,7 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
                 )
             # Make sure most commands have been purged from running_commands;
             # it may have a status command.
-            assert len(self.csc.controller.running_commands) <= 1
+            assert self.csc.controller.running_commands <= 1
 
             data2 = await self.assert_next_sample(
                 self.remote.evt_dimmMeasurement, flush=True, timeout=MEAS_TIMEOUT
@@ -148,7 +148,8 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
             self.remote.evt_summaryState.flush()
 
             # close the mock controller
-            await self.csc.controller.mock_dimm.close()
+            await self.csc.controller.mock_master_port.close()
+            await self.csc.controller.mock_meteo_port.close()
 
             await self.assert_next_summary_state(
                 state=salobj.State.FAULT,
