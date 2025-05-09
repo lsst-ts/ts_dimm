@@ -183,7 +183,19 @@ class DIMMCSC(salobj.ConfigurableCsc):
         config_dict = validator.validate(config)
         if not isinstance(config_dict, dict):
             raise RuntimeError(f"config {config!r} invalid: not a dict")
-        controller_config = types.SimpleNamespace(**config_dict)
+
+        def dict_to_namespace(d):
+            """Converts a nested dict[str, Any] to type SimpleNamespace"""
+            if isinstance(d, dict):
+                return types.SimpleNamespace(
+                    **{k: dict_to_namespace(v) for k, v in d.items()}
+                )
+            elif isinstance(d, list):
+                return [dict_to_namespace(item) for item in d]
+            else:
+                return d
+
+        controller_config = dict_to_namespace(config_dict)
 
         await self.controller.setup(controller_config)
 
@@ -211,7 +223,9 @@ class DIMMCSC(salobj.ConfigurableCsc):
             await self.controller.start()
         except Exception:
             self.log.exception("Failed starting the controller.")
-            await self.fault(code=CONTROLLER_START_FAILED)
+            await self.fault(
+                code=CONTROLLER_START_FAILED, report="Controller start failed."
+            )
             raise RuntimeError(
                 "Failed to start controller. Check configuration and make sure DIMM"
                 "controller is alive and reachable by the CSC."
