@@ -23,7 +23,7 @@ import asyncio
 import traceback
 import types
 
-from lsst.ts import salobj, utils
+from lsst.ts import salobj
 from lsst.ts.dimm import controllers
 
 from . import __version__
@@ -132,7 +132,7 @@ class DIMMCSC(salobj.ConfigurableCsc):
         self.telemetry_loop_task = None
 
         self.seeing_loop_running = False
-        self.seeing_loop_task = utils.make_done_future()
+        self.seeing_loop_task = None
 
         self.csc_running = True
         self.measurement_validity = None
@@ -141,6 +141,11 @@ class DIMMCSC(salobj.ConfigurableCsc):
     @staticmethod
     def get_config_pkg():
         return "ts_config_ocs"
+
+    async def close_tasks(self) -> None:
+        """Stop active tasks."""
+        if self.controller is not None:
+            self.controller.unset_controller()
 
     async def configure(self, config):
         """Override superclass configure method to implement CSC
@@ -183,7 +188,19 @@ class DIMMCSC(salobj.ConfigurableCsc):
         config_dict = validator.validate(config)
         if not isinstance(config_dict, dict):
             raise RuntimeError(f"config {config!r} invalid: not a dict")
-        controller_config = types.SimpleNamespace(**config_dict)
+
+        def dict_to_namespace(d):
+            """Converts a nested dict[str, Any] to type SimpleNamespace"""
+            if isinstance(d, dict):
+                return types.SimpleNamespace(
+                    **{k: dict_to_namespace(v) for k, v in d.items()}
+                )
+            elif isinstance(d, list):
+                return [dict_to_namespace(item) for item in d]
+            else:
+                return d
+
+        controller_config = dict_to_namespace(config_dict)
 
         await self.controller.setup(controller_config)
 
@@ -211,7 +228,9 @@ class DIMMCSC(salobj.ConfigurableCsc):
             await self.controller.start()
         except Exception:
             self.log.exception("Failed starting the controller.")
-            await self.fault(code=CONTROLLER_START_FAILED)
+            await self.fault(
+                code=CONTROLLER_START_FAILED, report="Controller start failed."
+            )
             raise RuntimeError(
                 "Failed to start controller. Check configuration and make sure DIMM"
                 "controller is alive and reachable by the CSC."
