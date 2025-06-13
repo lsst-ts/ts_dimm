@@ -20,8 +20,10 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import asyncio
+import datetime
 import traceback
 import types
+from zoneinfo import ZoneInfo
 
 from lsst.ts import salobj, utils
 from lsst.ts.dimm import controllers
@@ -133,6 +135,7 @@ class DIMMCSC(salobj.ConfigurableCsc):
 
         self.seeing_loop_running = False
         self.seeing_loop_task = utils.make_done_future()
+        self.dimm_off_in_morning_task = utils.make_done_future()
 
         self.csc_running = True
         self.measurement_validity = None
@@ -220,6 +223,11 @@ class DIMMCSC(salobj.ConfigurableCsc):
         self.telemetry_loop_task = asyncio.create_task(self.telemetry_loop())
         self.seeing_loop_task = asyncio.create_task(self.seeing_loop())
 
+        if self.dimm_off_in_morning_task.done():
+            self.dimm_off_in_morning_task = asyncio.create_task(
+                self.turn_dimm_off_in_morning()
+            )
+
         await super().end_enable(id_data)
 
     async def begin_disable(self, id_data):
@@ -236,6 +244,15 @@ class DIMMCSC(salobj.ConfigurableCsc):
         await self.cmd_disable.ack_in_progress(id_data, timeout=60)
         self.telemetry_loop_running = False
         self.seeing_loop_running = False
+
+        self.dimm_off_in_morning_task.cancel()
+        try:
+            await self.dimm_off_in_morning_task
+        except asyncio.CancelledError:
+            pass  # Expected result
+
+        # Send command to set automation mode OFF.
+        await self.controller.set_automation_mode(AutomationMode.OFF)
 
         await super().begin_disable(id_data)
 
@@ -355,6 +372,33 @@ class DIMMCSC(salobj.ConfigurableCsc):
                 report="Error in telemetry loop.",
                 traceback=traceback.format_exc(),
             )
+
+    async def turn_dimm_off_in_morning(self):
+        """Issues a command daily at 9am to set automation off.
+
+        This feature prevents accidental opening by requiring
+        the observer to manually enable DIMM each day before
+        operating.
+        """
+        tz = ZoneInfo("America/Santiago")
+        time_to_turn_off = 9
+
+        while self.disabled_or_enabled:
+            now = datetime.datetime.now(tz)
+            end_time = datetime.datetime.combine(
+                now.date(), datetime.time(time_to_turn_off, 0), tzinfo=tz
+            )
+            if now >= end_time:
+                end_time += datetime.timedelta(days=1)
+            sleep_time = (end_time - now).total_seconds()
+            await asyncio.sleep(sleep_time)
+
+            # Send the command
+            await self.controller.set_automation_mode(AutomationMode.OFF)
+
+            # Make sure we aren't going to get a sleep of zero on the
+            # next run through the loop.
+            await asyncio.sleep(10)
 
     async def seeing_loop(self):
         """Seeing loop coroutine. This method is responsible for getting new
@@ -540,13 +584,11 @@ class DIMMCSC(salobj.ConfigurableCsc):
         """
 
         # wait for telemetry loop to die or kill it if timeout
-        timeout = True
         for i in range(self.loop_die_timeout):
             if loop.done():
-                timeout = False
                 break
             await asyncio.sleep(self.heartbeat_interval)
-        if timeout:
+        else:
             loop.cancel()
 
         try:
@@ -568,5 +610,12 @@ class DIMMCSC(salobj.ConfigurableCsc):
 
         self.csc_running = False
         await self.wait_loop(self.health_monitor_loop_task)
+
+        # Cancel and await the morning task
+        self.dimm_off_in_morning_task.cancel()
+        try:
+            await self.dimm_off_in_morning_task
+        except asyncio.CancelledError:
+            pass  # Expected result
 
         await super().close(exception=exception, cancel_start=cancel_start)
