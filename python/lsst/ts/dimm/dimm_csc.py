@@ -197,24 +197,29 @@ class DIMMCSC(salobj.ConfigurableCsc):
         await self.controller.unset()
         self.controller = None
 
-    async def end_enable(self, id_data):
-        """End do_enable; called after state changes but before command
-        acknowledged.
+    async def end_start(self, id_data):
+        """End do_start; called after state changes.
 
         This method will call `start` on the controller and start the telemetry
-        and seeing monitoring loops.
+        and seeing monitoring loops. It also starts the
+        turn_dimm_off_in_morning background task.
 
         Parameters
         ----------
         id_data : `CommandIdData`
             Command ID and data
         """
+        await self.cmd_start.ack_in_progress(id_data, timeout=60)
 
         try:
             await self.controller.start()
         except Exception:
             self.log.exception("Failed starting the controller.")
-            await self.fault(code=CONTROLLER_START_FAILED)
+            await self.fault(
+                code=CONTROLLER_START_FAILED,
+                report="Controller start failed.",
+                traceback=traceback.format_exc(),
+            )
             raise RuntimeError(
                 "Failed to start controller. Check configuration and make sure DIMM"
                 "controller is alive and reachable by the CSC."
@@ -228,7 +233,21 @@ class DIMMCSC(salobj.ConfigurableCsc):
                 self.turn_dimm_off_in_morning()
             )
 
-        await super().end_enable(id_data)
+        await super().end_start(id_data)
+
+    async def begin_enable(self, id_data):
+        """Begin do_start; called before state changes.
+
+        This method will set AMEBA mode to AUTO.
+
+        Parameters
+        ----------
+        id_data : `CommandIdData`
+            Command ID and data
+        """
+        await self.cmd_enable.ack_in_progress(id_data, timeout=60)
+        await self.controller.set_automation_mode(AutomationMode.AUTO)
+        await super().begin_enable(id_data)
 
     async def begin_disable(self, id_data):
         """Begin do_disable; called before state changes.
@@ -242,49 +261,11 @@ class DIMMCSC(salobj.ConfigurableCsc):
             Command ID and data
         """
         await self.cmd_disable.ack_in_progress(id_data, timeout=60)
-        self.telemetry_loop_running = False
-        self.seeing_loop_running = False
-
-        self.dimm_off_in_morning_task.cancel()
-        try:
-            await self.dimm_off_in_morning_task
-        except asyncio.CancelledError:
-            pass  # Expected result
 
         # Send command to set automation mode OFF.
         await self.controller.set_automation_mode(AutomationMode.OFF)
 
         await super().begin_disable(id_data)
-
-    async def end_disable(self, id_data):
-        """Transition to from `State.ENABLED` to `State.DISABLED`.
-
-        After switching from enable to disable, wait for telemetry and seeing
-        loop to finish. If they take longer then a timeout to finish, cancel
-        the future.
-
-        Parameters
-        ----------
-        id_data : `CommandIdData`
-            Command ID and data
-        """
-
-        try:
-            await self.wait_loop(self.telemetry_loop_task)
-        except Exception:
-            self.log.exception("Error trying to stop the telemetry loop. Continuing.")
-
-        try:
-            await self.wait_loop(self.seeing_loop_task)
-        except Exception:
-            self.log.exception("Error trying to stop the seeing loop. Continuing.")
-
-        try:
-            await self.controller.stop()
-        except Exception:
-            self.log.exception("Error in controller stop. Continuing...")
-
-        await super().end_disable(id_data)
 
     async def begin_standby(self, id_data):
         """Begin do_standby; called before the state changes.
@@ -296,13 +277,46 @@ class DIMMCSC(salobj.ConfigurableCsc):
         id_data : `CommandIdData`
             Command ID and data
         """
+        await self.cmd_standby.ack_in_progress(id_data, timeout=60)
+
+        # Signal the loops to end.
+        self.telemetry_loop_running = False
+        self.seeing_loop_running = False
+
+        self.dimm_off_in_morning_task.cancel()
+        try:
+            await self.dimm_off_in_morning_task
+        except asyncio.CancelledError:
+            pass  # Expected result
+        except Exception:
+            self.log.exception("Error trying to stop the AMEBA OFF timer. Continuing.")
+
+        # End the telemetry loop
+        try:
+            await self.wait_loop(self.telemetry_loop_task)
+        # Signal the loops to end.
+        except Exception:
+            self.log.exception("Error trying to stop the telemetry loop. Continuing.")
+
+        # End the seeing loop
+        try:
+            await self.wait_loop(self.seeing_loop_task)
+        except Exception:
+            self.log.exception("Error trying to stop the seeing loop. Continuing.")
+
+        # Disconnect the controller
+        try:
+            await self.controller.stop()
+        except Exception:
+            self.log.exception("Error in controller stop. Continuing...")
+
+        # De-allocate the controller
         try:
             await self.unset_controller()
         except Exception:
             self.log.exception("Error unsetting controller. Continuing.")
 
         await super().begin_standby(id_data)
-        await self.cmd_standby.ack_in_progress(id_data, timeout=60)
 
     def prepare_status_telemetry(self, state):
         """Prepare the status telemetry for sending by converting the DIMM

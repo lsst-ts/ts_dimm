@@ -159,14 +159,10 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
 
     async def test_set_ameba_mode(self):
         async with self.make_csc(
-            initial_state=salobj.State.STANDBY,
+            initial_state=salobj.State.ENABLED,
             config_dir=TEST_CONFIG_DIR,
             simulation_mode=1,
         ):
-            await salobj.set_summary_state(
-                remote=self.remote, state=salobj.State.ENABLED
-            )
-
             await self.remote.cmd_setAmebaMode.set_start(mode=AmebaMode.Manual.value)
             await self.assert_next_sample(
                 topic=self.remote.tel_ameba,
@@ -174,20 +170,21 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
                 flush=True,
             )
 
+            self.remote.evt_summaryState.flush()
             await salobj.set_summary_state(
-                remote=self.remote, state=salobj.State.DISABLED
-            )
-            await self.assert_next_summary_state(
-                state=salobj.State.STANDBY,
-                flush=False,
-                remote=self.remote,
+                remote=self.remote, state=salobj.State.STANDBY
             )
             await self.assert_next_summary_state(
                 state=salobj.State.DISABLED,
                 flush=False,
                 remote=self.remote,
             )
-            assert not self.csc.controller.connected
+            await self.assert_next_summary_state(
+                state=salobj.State.STANDBY,
+                flush=False,
+                remote=self.remote,
+            )
+            assert not self.csc.controller
 
     async def test_ameba_off_today(self):
         """The CSC should be able to disable ameba mode at 9am today."""
@@ -218,10 +215,15 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
                 self.remote.evt_summaryState.flush()
                 await salobj.set_summary_state(
                     remote=self.remote,
-                    state=salobj.State.DISABLED,
+                    state=salobj.State.STANDBY,
                 )
                 await self.assert_next_summary_state(
                     state=salobj.State.DISABLED,
+                    flush=False,
+                    remote=self.remote,
+                )
+                await self.assert_next_summary_state(
+                    state=salobj.State.STANDBY,
                     flush=False,
                     remote=self.remote,
                 )
@@ -255,10 +257,15 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
                 self.remote.evt_summaryState.flush()
                 await salobj.set_summary_state(
                     remote=self.remote,
-                    state=salobj.State.DISABLED,
+                    state=salobj.State.STANDBY,
                 )
                 await self.assert_next_summary_state(
                     state=salobj.State.DISABLED,
+                    flush=False,
+                    remote=self.remote,
+                )
+                await self.assert_next_summary_state(
+                    state=salobj.State.STANDBY,
                     flush=False,
                     remote=self.remote,
                 )
@@ -277,7 +284,8 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
             config_dir=TEST_CONFIG_DIR,
             simulation_mode=1,
         ):
-            self.csc.controller.set_automation_mode = AsyncMock()
+            set_automation_mode = AsyncMock()
+            self.csc.controller.set_automation_mode = set_automation_mode
 
             await asyncio.sleep(1)  # Let evt_summaryState propagate through...
             self.remote.evt_summaryState.flush()
@@ -285,14 +293,19 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
 
             await salobj.set_summary_state(
                 remote=self.remote,
-                state=salobj.State.DISABLED,
+                state=salobj.State.STANDBY,
             )
             await self.assert_next_summary_state(
                 state=salobj.State.DISABLED,
                 flush=False,
                 remote=self.remote,
             )
+            await self.assert_next_summary_state(
+                state=salobj.State.STANDBY,
+                flush=False,
+                remote=self.remote,
+            )
 
-            self.csc.controller.set_automation_mode.assert_awaited_with(
+            set_automation_mode.assert_awaited_with(
                 dimm.controllers.base_dimm.AutomationMode.OFF
             )
