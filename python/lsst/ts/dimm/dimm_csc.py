@@ -249,6 +249,23 @@ class DIMMCSC(salobj.ConfigurableCsc):
         await self.controller.set_automation_mode(AutomationMode.AUTO)
         await super().begin_enable(id_data)
 
+    async def end_enable(self, id_data):
+        """End do_enable; called after state changes.
+
+        This method will launch the turn_dimm_off_in_morning
+        task, in case it is not already running.
+
+        Parameters
+        ----------
+        id_data : `CommandIdData`
+            Command ID and data
+        """
+        if self.dimm_off_in_morning_task.done():
+            self.dimm_off_in_morning_task = asyncio.create_task(
+                self.turn_dimm_off_in_morning()
+            )
+        await super().end_enable(id_data)
+
     async def begin_disable(self, id_data):
         """Begin do_disable; called before state changes.
 
