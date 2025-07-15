@@ -19,8 +19,12 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+import asyncio
+import datetime
 import pathlib
 import unittest
+from unittest.mock import AsyncMock, patch
+from zoneinfo import ZoneInfo
 
 import pytest
 from lsst.ts import dimm, salobj, utils
@@ -29,6 +33,34 @@ from lsst.ts.xml.enums.DIMM import AmebaMode
 TEST_CONFIG_DIR = pathlib.Path(__file__).parents[1].joinpath("tests", "data", "config")
 SHORT_TIMEOUT = 5
 MEAS_TIMEOUT = 20
+
+
+fixed_now = datetime.datetime(2025, 1, 1, 8, 59, 0, tzinfo=ZoneInfo("America/Santiago"))
+real_sleep = asyncio.sleep
+long_sleeps = []
+
+
+class FixedDateTime(datetime.datetime):
+    """A mock of datetime.now that always returns a pre-determined value."""
+
+    @classmethod
+    def now(cls, tz=None):
+        return fixed_now.astimezone(tz) if tz else fixed_now.replace(tzinfo=None)
+
+
+async def capped_sleep(delay, *args, **kwargs):
+    """A mock for asyncio.sleep.
+
+    Any sleep requested for longer than 30 seconds will (1) be logged for
+    later verification and (2) be shortened to 1 second.
+    """
+
+    global long_sleeps
+    if delay > 30:
+        long_sleeps.append(delay)
+        await real_sleep(1, *args, **kwargs)
+    else:
+        await real_sleep(delay, *args, **kwargs)
 
 
 class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
@@ -127,14 +159,10 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
 
     async def test_set_ameba_mode(self):
         async with self.make_csc(
-            initial_state=salobj.State.STANDBY,
+            initial_state=salobj.State.ENABLED,
             config_dir=TEST_CONFIG_DIR,
             simulation_mode=1,
         ):
-            await salobj.set_summary_state(
-                remote=self.remote, state=salobj.State.ENABLED
-            )
-
             await self.remote.cmd_setAmebaMode.set_start(mode=AmebaMode.Manual.value)
             await self.assert_next_sample(
                 topic=self.remote.tel_ameba,
@@ -142,17 +170,142 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
                 flush=True,
             )
 
+            self.remote.evt_summaryState.flush()
             await salobj.set_summary_state(
-                remote=self.remote, state=salobj.State.DISABLED
-            )
-            await self.assert_next_summary_state(
-                state=salobj.State.STANDBY,
-                flush=False,
-                remote=self.remote,
+                remote=self.remote, state=salobj.State.STANDBY
             )
             await self.assert_next_summary_state(
                 state=salobj.State.DISABLED,
                 flush=False,
                 remote=self.remote,
             )
-            assert not self.csc.controller.connected
+            await self.assert_next_summary_state(
+                state=salobj.State.STANDBY,
+                flush=False,
+                remote=self.remote,
+            )
+            assert not self.csc.controller
+
+    async def test_ameba_off_today(self):
+        """The CSC should be able to disable ameba mode at 9am today."""
+        global long_sleeps
+        global fixed_now
+
+        fixed_now = datetime.datetime(
+            2025, 1, 1, 8, 59, 0, tzinfo=ZoneInfo("America/Santiago")
+        )
+        long_sleeps.clear()
+
+        with patch("datetime.datetime", FixedDateTime), patch(
+            "asyncio.sleep", new=capped_sleep
+        ):
+            async with self.make_csc(
+                initial_state=salobj.State.ENABLED,
+                config_dir=TEST_CONFIG_DIR,
+                simulation_mode=1,
+            ):
+                self.csc.controller.set_automation_mode = AsyncMock()
+
+                await real_sleep(10)
+                self.assertEqual(long_sleeps, [60])
+                self.csc.controller.set_automation_mode.assert_awaited_with(
+                    dimm.controllers.base_dimm.AutomationMode.OFF
+                )
+
+                self.remote.evt_summaryState.flush()
+                await salobj.set_summary_state(
+                    remote=self.remote,
+                    state=salobj.State.STANDBY,
+                )
+                await self.assert_next_summary_state(
+                    state=salobj.State.DISABLED,
+                    flush=False,
+                    remote=self.remote,
+                )
+                await self.assert_next_summary_state(
+                    state=salobj.State.STANDBY,
+                    flush=False,
+                    remote=self.remote,
+                )
+
+    async def test_ameba_off_tomorrow(self):
+        """The CSC should be able to disable ameba mode at 9am tomorrow."""
+        global long_sleeps
+        global fixed_now
+
+        fixed_now = datetime.datetime(
+            2025, 1, 1, 9, 1, 0, tzinfo=ZoneInfo("America/Santiago")
+        )
+        long_sleeps.clear()
+
+        with patch("datetime.datetime", FixedDateTime), patch(
+            "asyncio.sleep", new=capped_sleep
+        ):
+            async with self.make_csc(
+                initial_state=salobj.State.ENABLED,
+                config_dir=TEST_CONFIG_DIR,
+                simulation_mode=1,
+            ):
+                self.csc.controller.set_automation_mode = AsyncMock()
+
+                await real_sleep(10)
+                self.assertEqual(long_sleeps, [86400 - 60])
+                self.csc.controller.set_automation_mode.assert_awaited_with(
+                    dimm.controllers.base_dimm.AutomationMode.OFF
+                )
+
+                self.remote.evt_summaryState.flush()
+                await salobj.set_summary_state(
+                    remote=self.remote,
+                    state=salobj.State.STANDBY,
+                )
+                await self.assert_next_summary_state(
+                    state=salobj.State.DISABLED,
+                    flush=False,
+                    remote=self.remote,
+                )
+                await self.assert_next_summary_state(
+                    state=salobj.State.STANDBY,
+                    flush=False,
+                    remote=self.remote,
+                )
+
+    async def test_ameba_off_on_disable(self):
+        """Automation mode should be turned off when the CSC disables."""
+        global long_sleeps
+        global fixed_now
+
+        fixed_now = datetime.datetime(
+            2025, 1, 1, 9, 1, 0, tzinfo=ZoneInfo("America/Santiago")
+        )
+
+        async with self.make_csc(
+            initial_state=salobj.State.ENABLED,
+            config_dir=TEST_CONFIG_DIR,
+            simulation_mode=1,
+        ):
+            set_automation_mode = AsyncMock()
+            self.csc.controller.set_automation_mode = set_automation_mode
+
+            await asyncio.sleep(1)  # Let evt_summaryState propagate through...
+            self.remote.evt_summaryState.flush()
+            self.csc.controller.set_automation_mode.assert_not_awaited()
+
+            await salobj.set_summary_state(
+                remote=self.remote,
+                state=salobj.State.STANDBY,
+            )
+            await self.assert_next_summary_state(
+                state=salobj.State.DISABLED,
+                flush=False,
+                remote=self.remote,
+            )
+            await self.assert_next_summary_state(
+                state=salobj.State.STANDBY,
+                flush=False,
+                remote=self.remote,
+            )
+
+            set_automation_mode.assert_awaited_with(
+                dimm.controllers.base_dimm.AutomationMode.OFF
+            )
