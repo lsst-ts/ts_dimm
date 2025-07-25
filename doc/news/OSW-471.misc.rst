@@ -1,0 +1,2 @@
+* Moved management of weather station CSC purely into the AstelCo controller.
+* Added towncrier and fixed versioning.
