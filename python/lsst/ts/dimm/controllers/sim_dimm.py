@@ -37,8 +37,8 @@ class SimDIMM(BaseDIMM):
     The value of simulate is ignored because this DIMM always simulates.
     """
 
-    def __init__(self, log, simulate):
-        super().__init__(log, simulate)
+    def __init__(self, domain, log, simulate):
+        super().__init__(domain, log, simulate)
 
         self.avg_seeing = 0.5  # average seeing (arcsec)
         self.std_seeing = 0.1  # standard deviation (arcsec)

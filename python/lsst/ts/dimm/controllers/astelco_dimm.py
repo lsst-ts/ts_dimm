@@ -28,6 +28,7 @@ from collections import defaultdict
 from statistics import mean
 
 import yaml
+from lsst.ts import salobj
 from lsst.ts.tcpip import LOCAL_HOST, close_stream_writer
 from lsst.ts.utils import index_generator, make_done_future, tai_from_utc
 
@@ -190,8 +191,8 @@ class AstelcoDIMM(BaseDIMM):
       * Surround the string with double quotes.
     """
 
-    def __init__(self, log, simulate=False):
-        super().__init__(log=log, simulate=simulate)
+    def __init__(self, domain, log, simulate=False):
+        super().__init__(domain=domain, log=log, simulate=simulate)
 
         self.config = None
 
@@ -291,17 +292,55 @@ properties:
   password:
     type: string
     default: admin
+  ess_index:
+    type: integer
+    default: 301
 """
         )
 
-    async def start(self):
-        """Start DIMM. Overwrites method from base class."""
-
-        await self.connect()
+    async def connect_weather_remote(self):
+        """Open the ESS remote if it is not already."""
 
         if self.ws_remote is None:
-            self.status["status"] = DIMMStatus["ERROR"]
-            raise RuntimeError("No WeatherStation remote available")
+            try:
+                self.ws_remote = salobj.Remote(
+                    self.domain,
+                    "ESS",
+                    self.config.ess_index,
+                    readonly=True,
+                    include=[
+                        "temperature",
+                        "relativeHumidity",
+                        "pressure",
+                        "airFlow",
+                        "dewPoint",
+                        "precipitation",
+                    ],
+                )
+                await self.ws_remote.start_task
+            except Exception as e:
+                self.status["status"] = DIMMStatus["ERROR"]
+                self.ws_remote = None
+                raise RuntimeError("No WeatherStation remote available") from e
+
+    async def disconnect_weather_remote(self):
+        """Close the ESS remote if it is open."""
+
+        if self.ws_remote is not None:
+            self.ws_remote.tel_temperature.callback = None
+            self.ws_remote.tel_relativeHumidity.callback = None
+            self.ws_remote.tel_pressure.callback = None
+            self.ws_remote.tel_airFlow.callback = None
+            self.ws_remote.tel_dewPoint.callback = None
+            self.ws_remote.evt_precipitation.callback = None
+
+            await self.ws_remote.close()
+            self.ws_remote = None
+
+    async def start(self):
+        """Start DIMM. Overwrites method from base class."""
+        await self.connect()
+        await self.connect_weather_remote()
 
         if not self.simulate:
             # Set weather station callbacks.
@@ -322,13 +361,7 @@ properties:
     async def stop(self):
         """Stop DIMM. Overwrites method from base class."""
 
-        if self.ws_remote is not None:
-            self.ws_remote.tel_temperature.callback = None
-            self.ws_remote.tel_relativeHumidity.callback = None
-            self.ws_remote.tel_pressure.callback = None
-            self.ws_remote.tel_airFlow.callback = None
-            self.ws_remote.tel_dewPoint.callback = None
-            self.ws_remote.evt_precipitation.callback = None
+        await self.disconnect_weather_remote()
 
         # TODO: Change to STOPPED?
         self.status["status"] = DIMMStatus["INITIALIZED"]
@@ -883,6 +916,8 @@ properties:
         """
         if not self.simulate:
             raise RuntimeError("Only allowed in simulation mode")
+
+        await self.connect_weather_remote()
 
         temperature_data = self.ws_remote.tel_temperature.DataType()
         temperature_data.numChannels = 1

@@ -48,7 +48,7 @@ class BaseDIMM(abc.ABC):
     to setup and operate the DIMM.
     """
 
-    def __init__(self, log, simulate):
+    def __init__(self, domain, log, simulate):
         self.status = {
             "status": DIMMStatus["NOTSET"],
             "ra": 0.0,
@@ -65,6 +65,7 @@ class BaseDIMM(abc.ABC):
             "startTime": 0,
             "finishTime": 0,
         }
+        self.domain = domain
         self.log = log.getChild(type(self).__name__)
         self.simulate = simulate
 

@@ -171,14 +171,9 @@ class DIMMCSC(salobj.ConfigurableCsc):
         settings = types.SimpleNamespace(**instance)
         controller_class = available_controllers[settings.controller]
         self.controller = controller_class(
-            log=self.log, simulate=self.simulation_mode != 0
+            domain=self.domain, log=self.log, simulate=self.simulation_mode != 0
         )
         self.measurement_validity = settings.measurement_validity
-
-        # TODO DM-33985 Improve the way the WeatherStation remote is
-        #  initialized in the controller.
-        if settings.controller == "astelco":
-            self.controller.ws_remote = self.ws_remote
 
         config = settings.config
         config_schema = self.controller.get_config_schema()
