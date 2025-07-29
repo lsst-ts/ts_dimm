@@ -175,8 +175,6 @@ class DIMMCSC(salobj.ConfigurableCsc):
         )
         self.measurement_validity = settings.measurement_validity
 
-        # TODO DM-33985 Improve the way the WeatherStation remote is
-        #  initialized in the controller.
         if settings.controller == "astelco":
             self.controller.ws_remote = self.ws_remote
 
