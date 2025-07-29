@@ -1,0 +1,2 @@
+* Added towncrier and fixed versioning.
+* Implemented set_automation_mode in the simulator.

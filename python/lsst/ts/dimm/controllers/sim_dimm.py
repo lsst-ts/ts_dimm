@@ -25,7 +25,7 @@ import numpy as np
 import yaml
 from lsst.ts import utils
 
-from .base_dimm import BaseDIMM, DIMMStatus
+from .base_dimm import AutomationMode, BaseDIMM, DIMMStatus
 
 __all__ = ["SimDIMM"]
 
@@ -145,6 +145,9 @@ properties:
         """Stop DIMM. Overwrites method from base class."""
         self.measurement_loop.cancel()
         self.status["status"] = DIMMStatus["INITIALIZED"]
+
+    async def set_automation_mode(self, mode: AutomationMode) -> None:
+        pass  # Automation mode is always AUTO for the simulator.
 
     async def new_measurement(self):
         """Generate a new measurement for the simulated DIMM.
