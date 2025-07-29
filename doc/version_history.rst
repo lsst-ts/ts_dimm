@@ -1,3 +1,13 @@
+v0.9.7 (2025-07-29)
+===================
+
+Other Changes and Additions
+---------------------------
+
+- * Added towncrier and fixed versioning.
+  * Implemented set_automation_mode in the simulator. (`OSW-471 <https://rubinobs.atlassian.net//browse/OSW-471>`_)
+
+
 .. _version_history:Version_History:
 
 ===============
