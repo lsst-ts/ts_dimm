@@ -4,6 +4,7 @@ __pycache__
 doc/_build
 doc/py-api
 version.py
+towncrier.toml
 
 # Pytest
 .coverage
