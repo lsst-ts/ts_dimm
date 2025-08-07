@@ -4,54 +4,54 @@ v0.9.7 (2025-07-29)
 Other Changes and Additions
 ---------------------------
 
-- * Added towncrier and fixed versioning.
-  * Implemented set_automation_mode in the simulator. (`OSW-471 <https://rubinobs.atlassian.net//browse/OSW-471>`_)
+* Added towncrier and fixed versioning.
+* Implemented set_automation_mode in the simulator. (`OSW-471 <https://rubinobs.atlassian.net//browse/OSW-471>`_)
 
 
-.. _version_history:Version_History:
+v0.9.6
+======
 
-===============
-Version History
-===============
+* Re-organized the connect on CSC start, and set AMEBA mode to AUTO on enable.
+* Automatically set AMEBA mode to off daily at 9am.
 
 v0.9.5
-------
+======
 
 * Updated ``MockAstelcoDIMM`` to mimick the behavior of the actual DIMM that sends duplicated data when requested.
 * Made some minor improvement to ``DIMMCSC.clean_topic``.
 * Included a check that no duplicated data is published by the CSC.
 
 v0.9.4
-------
+======
 
 * Implemented the `setAmebaMode` CSC command.
 * Implemented the `ameba` telemetry topic.
 
 v0.9.3
-------
+======
 
 * Updated for the latest ts-tcpip and ESS CSC XML.
 * Added commands and telemetry for the DIMM XML.
 
 v0.9.2
-------
+======
 
 * Improve error handling in ``AstelcoDIMM``.
 
 v0.9.1
-------
+======
 
 * Fix measurement expiration timestamp.
 
 v0.9.0
-------
+======
 
 * Replace WeatherStation CSC with ESS:301.
 * Modernize CI build script.
 * Update to support ts-pre-commit.
 
 v0.8.3
-------
+======
 
 * Update pre-commit configuration.
 * Run isort in the entire package.
@@ -71,7 +71,7 @@ v0.8.3
 
 
 v0.8.2
-------
+======
 
 * `AstelcoDIMM`:
 
@@ -86,7 +86,7 @@ Requires:
 * IDL file for DIMM from ts_xml 12
 
 v0.8.1
-------
+======
 
 * `AstelcoDIMM`:
 
@@ -108,7 +108,7 @@ Requires:
 * IDL file for DIMM from ts_xml 12
 
 v0.8.0
-------
+======
 
 * Add a ``simulate`` constructor argument to `BaseDIMM` and subclasses.
 * Add `MockAstelcoDIMM`
@@ -128,7 +128,7 @@ Requires:
 * IDL file for DIMM from ts_xml 12
 
 v0.7.0
-------
+======
 
 * Switch to pyproject.toml.
 
@@ -139,12 +139,12 @@ Requires:
 * IDL file for DIMM from ts_xml 12
 
 v0.6.1
-------
+======
 
 * Add stubs for new commands
 
 v0.6.0
-------
+======
 * Prepare for salobj 7.
 
 Requires:
@@ -160,7 +160,7 @@ Requires:
 * IDL file for DIMM from ts_xml 11
 
 v0.5.3
-------
+======
 * Added documentation.
 
 Requires:
@@ -170,7 +170,7 @@ Requires:
 * IDL file for DIMM from ts_xml 9.1
 
 v0.5.2
-------
+======
 * Fixed an if statement so now the Astelco status is set correctly.
 
 Requires:
@@ -180,7 +180,7 @@ Requires:
 * IDL file for DIMM from ts_xml 9.1
 
 v0.5.1
-------
+======
 * Reverted several changes where ``controller`` was replaced with ``type``.
 * Incorporated name change for Environment to WeatherStation.
   Also added support for the WeatherStation ``weather`` telemetry.
@@ -203,15 +203,15 @@ Requires:
 * ts_salobj 6.3
 
 v0.5.0
-------
+======
 * Administrative tag because v0.5.1.alpha.1 was already tagged.
 
 v0.4.0
-------
+======
 * Administrative tag because v0.5.1.alpha.1 was already tagged.
 
 v0.3.0
-------
+======
 * Added CLI build.
 * Removed many f-types that broke the unit tests.
 * Other minor code improvements.
@@ -222,7 +222,7 @@ Requires:
 * ts_salobj 6
 
 v0.2.0
-------
+======
 * Upgrade DIMM CSC to salobj 4 and make it a configurable CSC.
 * Fix issue when loading controller in non-simulation mode.
 
@@ -231,11 +231,11 @@ Requires:
 * ts_salobj 4
 
 v0.1.1
-------
+======
 * Added some modifications to account for latest interface provided by vendor.
 
 v0.1.0
-------
+======
 * Finished implementation of the basic DIMM CSC functionality.
 * Added soar_dimm a controller interface to grab data from the SOAR DIMM database.
   The controller is still under development, we will access whether or not to finish it in the future.
