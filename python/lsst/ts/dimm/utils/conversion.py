@@ -19,9 +19,15 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-__all__ = ["convert_to_int", "convert_to_float", "convert_dimm_measurement_data"]
+__all__ = [
+    "convert_to_int",
+    "convert_to_float",
+    "convert_dimm_measurement_data",
+    "dict_to_namespace",
+]
 
 import math
+import types
 
 
 def convert_to_int(value):
@@ -117,3 +123,13 @@ def convert_dimm_measurement_data(data):
 
     converted_data = {**converted_float_data, **converted_int_data}
     return converted_data
+
+
+def dict_to_namespace(d):
+    """Converts a nested dict[str, Any] to type SimpleNamespace"""
+    if isinstance(d, dict):
+        return types.SimpleNamespace(**{k: dict_to_namespace(v) for k, v in d.items()})
+    elif isinstance(d, list):
+        return [dict_to_namespace(item) for item in d]
+    else:
+        return d

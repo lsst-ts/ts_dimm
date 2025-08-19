@@ -35,6 +35,7 @@ from .utils.conversion import (
     convert_dimm_measurement_data,
     convert_to_float,
     convert_to_int,
+    dict_to_namespace,
 )
 
 __all__ = ["DIMMCSC", "run_dimm_csc"]
@@ -149,6 +150,7 @@ class DIMMCSC(salobj.ConfigurableCsc):
         """Stop active tasks."""
         if self.controller is not None:
             self.controller.unset_controller()
+        await super().close_tasks()
 
     async def configure(self, config):
         """Override superclass configure method to implement CSC
@@ -189,17 +191,6 @@ class DIMMCSC(salobj.ConfigurableCsc):
         config_dict = validator.validate(config)
         if not isinstance(config_dict, dict):
             raise RuntimeError(f"config {config!r} invalid: not a dict")
-
-        def dict_to_namespace(d):
-            """Converts a nested dict[str, Any] to type SimpleNamespace"""
-            if isinstance(d, dict):
-                return types.SimpleNamespace(
-                    **{k: dict_to_namespace(v) for k, v in d.items()}
-                )
-            elif isinstance(d, list):
-                return [dict_to_namespace(item) for item in d]
-            else:
-                return d
 
         controller_config = dict_to_namespace(config_dict)
 

@@ -25,11 +25,11 @@ import enum
 import math
 from collections import defaultdict
 from statistics import mean
-from types import SimpleNamespace
 
 import yaml
 from lsst.ts.utils import make_done_future, tai_from_utc
 
+from ..utils import dict_to_namespace
 from .astelco_enums import RainState, SkyStatus
 from .base_dimm import AutomationMode, BaseDIMM, DIMMStatus
 from .mock_astelco_dimm import MockAstelcoDIMM
@@ -92,17 +92,6 @@ class AstelcoDIMM(BaseDIMM):
         config : `object`
             Configuration object
         """
-
-        def dict_to_namespace(d):
-            if isinstance(d, dict):
-                return SimpleNamespace(
-                    **{k: dict_to_namespace(v) for k, v in d.items()}
-                )
-            elif isinstance(d, list):
-                return [dict_to_namespace(item) for item in d]
-            else:
-                return d
-
         self.config = dict_to_namespace(config)
         self.master = OpenTplConnection(self.log, self.simulate)
         self.meteo = OpenTplConnection(self.log, self.simulate)
