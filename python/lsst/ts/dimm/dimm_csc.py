@@ -35,6 +35,7 @@ from .utils.conversion import (
     convert_dimm_measurement_data,
     convert_to_float,
     convert_to_int,
+    dict_to_namespace,
 )
 
 __all__ = ["DIMMCSC", "run_dimm_csc"]
@@ -145,6 +146,12 @@ class DIMMCSC(salobj.ConfigurableCsc):
     def get_config_pkg():
         return "ts_config_ocs"
 
+    async def close_tasks(self) -> None:
+        """Stop active tasks."""
+        if self.controller is not None:
+            self.controller.unset_controller()
+        await super().close_tasks()
+
     async def configure(self, config):
         """Override superclass configure method to implement CSC
         configuration.
@@ -184,7 +191,8 @@ class DIMMCSC(salobj.ConfigurableCsc):
         config_dict = validator.validate(config)
         if not isinstance(config_dict, dict):
             raise RuntimeError(f"config {config!r} invalid: not a dict")
-        controller_config = types.SimpleNamespace(**config_dict)
+
+        controller_config = dict_to_namespace(config_dict)
 
         await self.controller.setup(controller_config)
 
