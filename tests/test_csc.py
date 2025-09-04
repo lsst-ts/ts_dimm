@@ -118,11 +118,10 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
             assert data.fwhm > 0.1
             assert data.fluxL > 1000
             assert data.fluxR > 1000
-            if hasattr(data, "expiresAt"):
-                assert data.expiresIn == self.csc.measurement_validity
-                assert data.expiresAt == pytest.approx(
-                    utils.utc_from_tai_unix(data.private_sndStamp) + data.expiresIn
-                )
+            assert data.expiresIn == self.csc.measurement_validity
+            assert data.expiresAt == pytest.approx(
+                utils.utc_from_tai_unix(data.private_sndStamp) + data.expiresIn
+            )
             # Make sure most commands have been purged from running_commands;
             # it may have a status command.
             assert self.csc.controller.running_commands <= 1
