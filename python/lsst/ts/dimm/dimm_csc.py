@@ -358,7 +358,6 @@ class DIMMCSC(salobj.ConfigurableCsc):
         """
         return dict(
             status=convert_to_int(state["status"]),
-            hrNum=convert_to_int(state["hrnum"]),
             altitude=convert_to_float(state["altitude"]),
             azimuth=convert_to_float(state["azimuth"]),
             ra=convert_to_float(state["ra"]),
@@ -381,7 +380,6 @@ class DIMMCSC(salobj.ConfigurableCsc):
                 self.log.debug(f"Controller running? {self.controller_running}")
 
                 state_topic = self.prepare_status_telemetry(state)
-                state_topic = self.clean_topic("tel_status", state_topic)
                 try:
                     await self.tel_status.set_write(**state_topic)
                 except ValueError:
@@ -394,12 +392,9 @@ class DIMMCSC(salobj.ConfigurableCsc):
                     )
                     break
 
-                # TODO: DM-48873 Remove the `hasattr` condition when cycle 39
-                # XML is no longer in service.
-                if hasattr(self, "tel_ameba"):
-                    self.log.debug("Collecting AMEBA state.")
-                    ameba_topic = await self.controller.get_ameba()
-                    await self.tel_ameba.set_write(**ameba_topic)
+                self.log.debug("Collecting AMEBA state.")
+                ameba_topic = await self.controller.get_ameba()
+                await self.tel_ameba.set_write(**ameba_topic)
 
                 await asyncio.sleep(self.heartbeat_interval)
         except Exception:
@@ -463,9 +458,6 @@ class DIMMCSC(salobj.ConfigurableCsc):
                         converted_data["timestamp"] + self.measurement_validity
                     )
                     converted_data["expiresIn"] = self.measurement_validity
-                    converted_data = self.clean_topic(
-                        "evt_dimmMeasurement", converted_data
-                    )
 
                     await self.evt_dimmMeasurement.set_write(**converted_data)
                 await asyncio.sleep(self.heartbeat_interval)
@@ -479,40 +471,6 @@ class DIMMCSC(salobj.ConfigurableCsc):
                     traceback=traceback.format_exc(),
                 )
                 break
-
-    def clean_topic(self, topic_name, kwargs):
-        """Adjusts the state_topic dictionary to conform with the XML schema.
-
-        Adds the missing keys from the state_topic dictionary, setting
-        those to the default of the correct data type. Removes keys from
-        the dictionary that are not part of the schema.
-
-        TODO: DM-48873 remove this function and all calls to it.
-
-        Parameters
-        ----------
-        topic_name : str
-            The name of the topic for the SAL schema to apply.
-
-        kwargs : dict[str, Any]
-            The dictionary to be cleaned up.
-
-        Returns
-        -------
-        dict[str, Any]
-            The cleaned dictionary.
-        """
-        topic_attributes = (
-            set(self.salinfo.metadata.topic_info[topic_name].field_info.keys())
-            if hasattr(self.salinfo, "metadata")
-            else set(self.salinfo.component_info.topics[topic_name].fields.keys())
-        )
-
-        cleaned_dict = dict(
-            [(key, value) for key, value in kwargs.items() if key in topic_attributes]
-        )
-
-        return cleaned_dict
 
     async def do_gotoAltAz(self, data):
         """Move to Alt/AZ position.
