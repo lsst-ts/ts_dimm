@@ -16,7 +16,7 @@ test:
   requires:
     - sqlalchemy
     - ts-conda-build =0.4
-    - ts-xml {{ xml_conda_version }}
+    - ts-xml {{ xml_version }}
     - ts-salobj {{ salobj_version }}
     - ts-tcpip
   source_files:
