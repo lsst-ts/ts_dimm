@@ -8,6 +8,7 @@ source:
 
 build:
   script: {{ PYTHON }} -m pip install --no-deps --ignore-installed .
+  string: "py{{ PY_VER | replace('.', '') }}{{ PKG_HASH }}_{{ PKG_BUILDNUM }}"
   noarch: generic
   entry_points:
     - run_dimm_csc = lsst.ts.dimm.dimm_csc:run_dimm_csc
@@ -15,7 +16,7 @@ build:
 test:
   requires:
     - sqlalchemy
-    - ts-conda-build =0.4
+    - ts-conda-build =0.5
     - ts-xml {{ xml_version }}
     - ts-salobj {{ salobj_version }}
     - ts-tcpip
@@ -38,7 +39,7 @@ requirements:
     - python {{ python }}
     - setuptools
     - setuptools_scm
-    - ts-conda-build =0.4
+    - ts-conda-build =0.5
   run:
     - python {{ python }}
     - setuptools
