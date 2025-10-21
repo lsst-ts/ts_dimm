@@ -55,7 +55,6 @@ async def capped_sleep(delay, *args, **kwargs):
     later verification and (2) be shortened to 1 second.
     """
 
-    global long_sleeps
     if delay > 30:
         long_sleeps.append(delay)
         await real_sleep(1, *args, **kwargs)
@@ -188,7 +187,6 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
 
     async def test_ameba_off_today(self):
         """The CSC should be able to disable ameba mode at 9am today."""
-        global long_sleeps
         global fixed_now
 
         fixed_now = datetime.datetime(
@@ -230,7 +228,6 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
 
     async def test_ameba_off_tomorrow(self):
         """The CSC should be able to disable ameba mode at 9am tomorrow."""
-        global long_sleeps
         global fixed_now
 
         fixed_now = datetime.datetime(
@@ -272,7 +269,6 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
 
     async def test_ameba_off_on_disable(self):
         """Automation mode should be turned off when the CSC disables."""
-        global long_sleeps
         global fixed_now
 
         fixed_now = datetime.datetime(

@@ -102,11 +102,6 @@ class DIMMCSC(salobj.ConfigurableCsc):
             config_dir=config_dir,
             initial_state=initial_state,
             simulation_mode=simulation_mode,
-            extra_commands={
-                # DM-48873 Remove after Cycle 39 XML is phased out.
-                "moveDome",
-                "setAmebaMode",
-            },
         )
 
         # A remote to weather station data
@@ -472,12 +467,23 @@ class DIMMCSC(salobj.ConfigurableCsc):
                 )
                 break
 
+    async def do_controllerCommand(self, data):
+        """Send a generic command string.
+
+        Parameters
+        ----------
+        data : `salobj.BaseMsgType`
+            Contains the data as defined in the SAL XML file.
+        """
+        self.assert_enabled()
+        raise salobj.ExpectedError("Not implemented yet.")
+
     async def do_gotoAltAz(self, data):
         """Move to Alt/AZ position.
 
         Parameters
         ----------
-        data : `salobj.type_hints.BaseDdsDataType`
+        data : `salobj.BaseMsgType`
             Contains the data as defined in the SAL XML file.
         """
         self.assert_enabled()
@@ -488,7 +494,7 @@ class DIMMCSC(salobj.ConfigurableCsc):
 
         Parameters
         ----------
-        data : `salobj.type_hints.BaseDdsDataType`
+        data : `salobj.BaseMsgType`
             Contains the data as defined in the SAL XML file.
         """
         self.assert_enabled()
@@ -499,7 +505,29 @@ class DIMMCSC(salobj.ConfigurableCsc):
 
         Parameters
         ----------
-        data : `salobj.type_hints.BaseDdsDataType`
+        data : `salobj.BaseMsgType`
+            Contains the data as defined in the SAL XML file.
+        """
+        self.assert_enabled()
+        raise salobj.ExpectedError("Not implemented yet.")
+
+    async def do_park(self, data):
+        """Stop observations and park the telescope.
+
+        Parameters
+        ----------
+        data : `salobj.BaseMsgType`
+            Contains the data as defined in the SAL XML file.
+        """
+        self.assert_enabled()
+        raise salobj.ExpectedError("Not implemented yet.")
+
+    async def do_recover(self, data):
+        """Run a predefined internal recovery sequence.
+
+        Parameters
+        ----------
+        data : `salobj.BaseMsgType`
             Contains the data as defined in the SAL XML file.
         """
         self.assert_enabled()
@@ -510,7 +538,7 @@ class DIMMCSC(salobj.ConfigurableCsc):
 
         Parameters
         ----------
-        data : `salobj.type_hints.BaseDdsDataType`
+        data : `salobj.BaseMsgType`
             Contains the data as defined in the SAL XML file.
         """
         self.assert_enabled()
@@ -522,7 +550,7 @@ class DIMMCSC(salobj.ConfigurableCsc):
 
         Parameters
         ----------
-        data : `salobj.type_hints.BaseDdsDataType`
+        data : `salobj.BaseMsgType`
             Contains the data as defined in the SAL XML file.
         """
         self.assert_enabled()
@@ -533,7 +561,7 @@ class DIMMCSC(salobj.ConfigurableCsc):
 
         Parameters
         ----------
-        data : `salobj.type_hints.BaseDdsDataType`
+        data : `salobj.BaseMsgType`
             Contains the data as defined in the SAL XML file.
         """
         self.assert_enabled()
