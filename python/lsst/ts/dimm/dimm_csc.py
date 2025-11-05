@@ -358,6 +358,9 @@ class DIMMCSC(salobj.ConfigurableCsc):
             azimuth=convert_to_float(state["azimuth"]),
             ra=convert_to_float(state["ra"]),
             decl=convert_to_float(state["dec"]),
+            focus=convert_to_float(state["focus"]),
+            motionState=convert_to_int(state["motion_state"]),
+            powerState=convert_to_int(state["power_state"]) != 0,
         )
 
     async def telemetry_loop(self):
