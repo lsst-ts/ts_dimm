@@ -23,7 +23,8 @@ import asyncio
 import datetime
 import pathlib
 import unittest
-from unittest.mock import AsyncMock, patch
+from itertools import chain
+from unittest.mock import AsyncMock, call, patch
 from zoneinfo import ZoneInfo
 
 import pytest
@@ -194,8 +195,9 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
         )
         long_sleeps.clear()
 
-        with patch("datetime.datetime", FixedDateTime), patch(
-            "asyncio.sleep", new=capped_sleep
+        with (
+            patch("datetime.datetime", FixedDateTime),
+            patch("asyncio.sleep", new=capped_sleep),
         ):
             async with self.make_csc(
                 initial_state=salobj.State.ENABLED,
@@ -235,8 +237,9 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
         )
         long_sleeps.clear()
 
-        with patch("datetime.datetime", FixedDateTime), patch(
-            "asyncio.sleep", new=capped_sleep
+        with (
+            patch("datetime.datetime", FixedDateTime),
+            patch("asyncio.sleep", new=capped_sleep),
         ):
             async with self.make_csc(
                 initial_state=salobj.State.ENABLED,
@@ -305,3 +308,44 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
             set_automation_mode.assert_awaited_with(
                 dimm.controllers.base_dimm.AutomationMode.OFF
             )
+
+    async def test_astelco_dimm_events(self):
+        async with self.make_csc(
+            initial_state=salobj.State.ENABLED,
+            config_dir=TEST_CONFIG_DIR,
+            simulation_mode=1,
+        ):
+            with (
+                patch.object(self.csc.controller.master.log, "debug") as mock_debug,
+                patch.object(self.csc.controller.master.log, "info") as mock_info,
+                patch.object(self.csc.controller.master.log, "warning") as mock_warn,
+                patch.object(self.csc.controller.master.log, "error") as mock_error,
+            ):
+                info_message = "0 EVENT INFO SAMPLE:0 Sample info message"
+                warn_message = "0 EVENT WARN SAMPLE:0 Sample warning message"
+                error_message = "12345 EVENT ERROR SAMPLE:0 Sample error message"
+
+                for message in (info_message, warn_message, error_message):
+                    await self.csc.controller.mock_master_port.write_msg(message)
+
+                await asyncio.sleep(SHORT_TIMEOUT)
+
+                for call_args_list in chain(
+                    mock_debug.call_args_list,
+                    mock_info.call_args_list,
+                    mock_warn.call_args_list,
+                    mock_error.call_args_list,
+                ):
+                    assert (
+                        call("DIMM log: SAMPLE:0 Sample info message")
+                        not in call_args_list
+                    )
+
+                assert (
+                    call("DIMM log: SAMPLE:0 Sample warning message")
+                    in mock_warn.call_args_list
+                )
+                assert (
+                    call("DIMM log: [cmdid=12345] SAMPLE:0 Sample error message")
+                    in mock_error.call_args_list
+                )

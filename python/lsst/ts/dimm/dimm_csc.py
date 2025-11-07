@@ -144,7 +144,8 @@ class DIMMCSC(salobj.ConfigurableCsc):
     async def close_tasks(self) -> None:
         """Stop active tasks."""
         if self.controller is not None:
-            self.controller.unset_controller()
+            await self.controller.unset()
+            self.controller = None
         await super().close_tasks()
 
     async def configure(self, config):

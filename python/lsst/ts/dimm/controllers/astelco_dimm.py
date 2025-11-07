@@ -484,3 +484,8 @@ definitions:
         running_master_commands = len(self.master.running_commands)
         running_meteo_commands = len(self.meteo.running_commands)
         return running_master_commands + running_meteo_commands
+
+    async def unset(self):
+        """Disconnect the TCP connections."""
+        await self.master.unset()
+        await self.meteo.unset()
