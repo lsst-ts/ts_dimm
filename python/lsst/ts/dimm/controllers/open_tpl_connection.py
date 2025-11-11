@@ -236,7 +236,6 @@ class OpenTplConnection:
 
     async def unset(self) -> None:
         await self.disconnect()
-        await super().unset()
 
     async def start(self):
         """Start DIMM. Overwrites method from base class."""
@@ -383,15 +382,15 @@ class OpenTplConnection:
                         command = self.running_commands.get(cmdid)
                         if command is not None:
                             command.replies.append(reply)
-                            try:
-                                handler(command=command, cmdid=cmdid, **kwargs)
-                            except Exception:
-                                self.log.exception(
-                                    f"Reply handler {handler} failed on {reply!r}"
-                                )
-                            if command.done_task.done():
-                                self.running_commands.pop(cmdid)
-                            break
+                        try:
+                            handler(command=command, cmdid=cmdid, **kwargs)
+                        except Exception:
+                            self.log.exception(
+                                f"Reply handler {handler} failed on {reply!r}"
+                            )
+                        if command is not None and command.done_task.done():
+                            self.running_commands.pop(cmdid)
+                        break
                 else:
                     self.log.warning(f"Ignoring unrecognized reply {reply!r}")
 
@@ -420,7 +419,7 @@ class OpenTplConnection:
         Parameters
         ----------
         command : `AstelcoCommand`
-            The command. Must not be None.
+            The command.
         cmdid : `int`
             The command ID.
         state : `str`
@@ -442,7 +441,7 @@ class OpenTplConnection:
                     command.done_task.set_result(None)
                 else:
                     self.log.warning(
-                        f"Cannot set {command} to error; it already finished"
+                        f"Cannot set {command} to complete; it already finished"
                     )
 
     def handle_data_error(self, command, cmdid, name, error):
@@ -454,7 +453,7 @@ class OpenTplConnection:
         Parameters
         ----------
         command : `AstelcoCommand`
-            The command. Must not be None.
+            The command.
         cmdid : `int`
             The command ID.
         name : `str`
@@ -489,7 +488,7 @@ class OpenTplConnection:
         Parameters
         ----------
         command : `AstelcoCommand`
-            The command. Must not be None.
+            The command.
         cmdid : `int`
             The command ID.
         name : `str`
@@ -521,7 +520,7 @@ class OpenTplConnection:
         Parameters
         ----------
         command : `AstelcoCommand`
-            The command. Must not be None.
+            The command.
         cmdid : `int`
             The command ID.
         name : `str`
@@ -533,7 +532,8 @@ class OpenTplConnection:
     def handle_event(self, command, cmdid, event_type, name, number, description=""):
         """Handle an EVENT reply.
 
-        We aren't relying on events, so just log it for now.
+        We aren't relying on events, so just log it for now (if WARN or
+        higher).
 
         Parameters
         ----------
@@ -550,7 +550,23 @@ class OpenTplConnection:
         description : `str`, optional
             More information.
         """
-        self.log.info(f"Read event {event_type} {name}={number} {description}")
+        # Ignore DEBUG and INFO events to avoid overwhelming the EFD logs.
+        if event_type in ("DEBUG", "INFO"):
+            return
+
+        log_str = (
+            f"DIMM log: [{command.name} {command.arg}] "
+            if command is not None
+            else f"DIMM log: [{cmdid=}] " if cmdid != 0 else "DIMM log: "
+        )
+
+        log_str += f"{name}:{number} {description}"
+        if event_type == "WARN":
+            self.log.warning(log_str)
+        elif event_type == "ERROR":
+            self.log.error(log_str)
+        else:
+            self.log.error(f"Event has unknown type {event_type} - {log_str}")
 
     @property
     def connected(self):
