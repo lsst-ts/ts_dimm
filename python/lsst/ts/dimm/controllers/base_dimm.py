@@ -22,6 +22,8 @@
 import abc
 from enum import IntEnum
 
+from lsst.ts.xml.enums.DIMM import ScopeMotion
+
 __all__ = ["BaseDIMM", "DIMMStatus"]
 
 """The status of the DIMM controller."""
@@ -56,6 +58,9 @@ class BaseDIMM(abc.ABC):
             "altitude": 0.0,
             "azimuth": 0.0,
             "hrnum": 0,
+            "focus": 0,
+            "motion_state": ScopeMotion.Park,
+            "power_state": 0,
         }
         self.ameba = {
             "mode": -1,

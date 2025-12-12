@@ -28,9 +28,10 @@ from statistics import mean
 
 import yaml
 from lsst.ts.utils import make_done_future, tai_from_utc
+from lsst.ts.xml.enums.DIMM import ScopeMotion
 
 from ..utils import dict_to_namespace
-from .astelco_enums import RainState, SkyStatus
+from .astelco_enums import RainState, ScopeMotionState, SkyStatus
 from .base_dimm import AutomationMode, BaseDIMM, DIMMStatus
 from .mock_astelco_dimm import MockAstelcoDIMM
 from .open_tpl_connection import OpenTplConnection
@@ -188,7 +189,8 @@ definitions:
             while self.connected:
                 status_cmd = await self.master.run_command(
                     "GET",
-                    "AMEBA.MODE;SCOPE.RA;SCOPE.DEC;SCOPE.ALT;SCOPE.AZ",
+                    "AMEBA.MODE;SCOPE.RA;SCOPE.DEC;SCOPE.ALT;SCOPE.AZ;"
+                    "SCOPE.FOCUS;SCOPE.MOTION_STATE;SCOPE.POWER_STATE",
                 )
 
                 # AMEBA.MODE is supposed to be an integer, but the only values
@@ -198,6 +200,21 @@ definitions:
                 self.status["dec"] = status_cmd.get_float("SCOPE.DEC")
                 self.status["altitude"] = status_cmd.get_float("SCOPE.ALT")
                 self.status["azimuth"] = status_cmd.get_float("SCOPE.AZ")
+                self.status["focus"] = status_cmd.get_float("SCOPE.FOCUS")
+                self.status["power_state"] = status_cmd.get_int("SCOPE.POWER_STATE")
+
+                motion_state = status_cmd.get_float("SCOPE.MOTION_STATE")
+                match motion_state:
+                    case ScopeMotionState.PARKED:
+                        self.status["motion_state"] = ScopeMotion.Park
+                    case ScopeMotionState.STOPPED:
+                        self.status["motion_state"] = ScopeMotion.Stand
+                    case ScopeMotionState.SLEWING:
+                        self.status["motion_state"] = ScopeMotion.Slew
+                    case ScopeMotionState.TRACKING:
+                        self.status["motion_state"] = ScopeMotion.Tracking
+                    case _:
+                        self.status["motion_state"] = -1
 
                 self.log.debug(f"AMEBA.MODE = {ameba_mode}")
                 # "0" means off, "1" means auto and "2" means manual.
