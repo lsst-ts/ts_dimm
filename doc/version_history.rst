@@ -1,3 +1,20 @@
+v0.9.8 (2026-01-26)
+===================
+
+New Features
+------------
+
+- Split OpenTPL client into a separate class to separate tt_master and tt_meteo. (`DM-50787 <https://rubinobs.atlassian.net//browse/DM-50787>`_)
+- Added commands `controllerCommand`, `park`, `recover`. (`OSW-1148 <https://rubinobs.atlassian.net//browse/OSW-1148>`_)
+- Refined handling of DIMM events. (`OSW-1397 <https://rubinobs.atlassian.net//browse/OSW-1397>`_)
+
+
+Performance Enhancement
+-----------------------
+
+- Updated ts-conda-build dependency version and conda build string. (`OSW-1277 <https://rubinobs.atlassian.net//browse/OSW-1277>`_)
+
+
 v0.9.7 (2025-07-29)
 ===================
 
