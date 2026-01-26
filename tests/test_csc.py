@@ -23,7 +23,8 @@ import asyncio
 import datetime
 import pathlib
 import unittest
-from unittest.mock import AsyncMock, patch
+from itertools import chain
+from unittest.mock import AsyncMock, call, patch
 from zoneinfo import ZoneInfo
 
 import pytest
@@ -55,7 +56,6 @@ async def capped_sleep(delay, *args, **kwargs):
     later verification and (2) be shortened to 1 second.
     """
 
-    global long_sleeps
     if delay > 30:
         long_sleeps.append(delay)
         await real_sleep(1, *args, **kwargs)
@@ -118,14 +118,13 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
             assert data.fwhm > 0.1
             assert data.fluxL > 1000
             assert data.fluxR > 1000
-            if hasattr(data, "expiresAt"):
-                assert data.expiresIn == self.csc.measurement_validity
-                assert data.expiresAt == pytest.approx(
-                    utils.utc_from_tai_unix(data.private_sndStamp) + data.expiresIn
-                )
+            assert data.expiresIn == self.csc.measurement_validity
+            assert data.expiresAt == pytest.approx(
+                utils.utc_from_tai_unix(data.private_sndStamp) + data.expiresIn
+            )
             # Make sure most commands have been purged from running_commands;
             # it may have a status command.
-            assert len(self.csc.controller.running_commands) <= 1
+            assert self.csc.controller.running_commands <= 1
 
             data2 = await self.assert_next_sample(
                 self.remote.evt_dimmMeasurement, flush=True, timeout=MEAS_TIMEOUT
@@ -148,7 +147,8 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
             self.remote.evt_summaryState.flush()
 
             # close the mock controller
-            await self.csc.controller.mock_dimm.close()
+            await self.csc.controller.mock_master_port.close()
+            await self.csc.controller.mock_meteo_port.close()
 
             await self.assert_next_summary_state(
                 state=salobj.State.FAULT,
@@ -188,7 +188,6 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
 
     async def test_ameba_off_today(self):
         """The CSC should be able to disable ameba mode at 9am today."""
-        global long_sleeps
         global fixed_now
 
         fixed_now = datetime.datetime(
@@ -196,8 +195,9 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
         )
         long_sleeps.clear()
 
-        with patch("datetime.datetime", FixedDateTime), patch(
-            "asyncio.sleep", new=capped_sleep
+        with (
+            patch("datetime.datetime", FixedDateTime),
+            patch("asyncio.sleep", new=capped_sleep),
         ):
             async with self.make_csc(
                 initial_state=salobj.State.ENABLED,
@@ -230,7 +230,6 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
 
     async def test_ameba_off_tomorrow(self):
         """The CSC should be able to disable ameba mode at 9am tomorrow."""
-        global long_sleeps
         global fixed_now
 
         fixed_now = datetime.datetime(
@@ -238,8 +237,9 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
         )
         long_sleeps.clear()
 
-        with patch("datetime.datetime", FixedDateTime), patch(
-            "asyncio.sleep", new=capped_sleep
+        with (
+            patch("datetime.datetime", FixedDateTime),
+            patch("asyncio.sleep", new=capped_sleep),
         ):
             async with self.make_csc(
                 initial_state=salobj.State.ENABLED,
@@ -272,7 +272,6 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
 
     async def test_ameba_off_on_disable(self):
         """Automation mode should be turned off when the CSC disables."""
-        global long_sleeps
         global fixed_now
 
         fixed_now = datetime.datetime(
@@ -309,3 +308,44 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
             set_automation_mode.assert_awaited_with(
                 dimm.controllers.base_dimm.AutomationMode.OFF
             )
+
+    async def test_astelco_dimm_events(self):
+        async with self.make_csc(
+            initial_state=salobj.State.ENABLED,
+            config_dir=TEST_CONFIG_DIR,
+            simulation_mode=1,
+        ):
+            with (
+                patch.object(self.csc.controller.master.log, "debug") as mock_debug,
+                patch.object(self.csc.controller.master.log, "info") as mock_info,
+                patch.object(self.csc.controller.master.log, "warning") as mock_warn,
+                patch.object(self.csc.controller.master.log, "error") as mock_error,
+            ):
+                info_message = "0 EVENT INFO SAMPLE:0 Sample info message"
+                warn_message = "0 EVENT WARN SAMPLE:0 Sample warning message"
+                error_message = "12345 EVENT ERROR SAMPLE:0 Sample error message"
+
+                for message in (info_message, warn_message, error_message):
+                    await self.csc.controller.mock_master_port.write_msg(message)
+
+                await asyncio.sleep(SHORT_TIMEOUT)
+
+                for call_args_list in chain(
+                    mock_debug.call_args_list,
+                    mock_info.call_args_list,
+                    mock_warn.call_args_list,
+                    mock_error.call_args_list,
+                ):
+                    assert (
+                        call("DIMM log: SAMPLE:0 Sample info message")
+                        not in call_args_list
+                    )
+
+                assert (
+                    call("DIMM log: SAMPLE:0 Sample warning message")
+                    in mock_warn.call_args_list
+                )
+                assert (
+                    call("DIMM log: [cmdid=12345] SAMPLE:0 Sample error message")
+                    in mock_error.call_args_list
+                )

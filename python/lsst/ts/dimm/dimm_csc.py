@@ -35,6 +35,7 @@ from .utils.conversion import (
     convert_dimm_measurement_data,
     convert_to_float,
     convert_to_int,
+    dict_to_namespace,
 )
 
 __all__ = ["DIMMCSC", "run_dimm_csc"]
@@ -101,11 +102,6 @@ class DIMMCSC(salobj.ConfigurableCsc):
             config_dir=config_dir,
             initial_state=initial_state,
             simulation_mode=simulation_mode,
-            extra_commands={
-                # DM-48873 Remove after Cycle 39 XML is phased out.
-                "moveDome",
-                "setAmebaMode",
-            },
         )
 
         # A remote to weather station data
@@ -144,6 +140,13 @@ class DIMMCSC(salobj.ConfigurableCsc):
     @staticmethod
     def get_config_pkg():
         return "ts_config_ocs"
+
+    async def close_tasks(self) -> None:
+        """Stop active tasks."""
+        if self.controller is not None:
+            await self.controller.unset()
+            self.controller = None
+        await super().close_tasks()
 
     async def configure(self, config):
         """Override superclass configure method to implement CSC
@@ -184,7 +187,8 @@ class DIMMCSC(salobj.ConfigurableCsc):
         config_dict = validator.validate(config)
         if not isinstance(config_dict, dict):
             raise RuntimeError(f"config {config!r} invalid: not a dict")
-        controller_config = types.SimpleNamespace(**config_dict)
+
+        controller_config = dict_to_namespace(config_dict)
 
         await self.controller.setup(controller_config)
 
@@ -350,11 +354,13 @@ class DIMMCSC(salobj.ConfigurableCsc):
         """
         return dict(
             status=convert_to_int(state["status"]),
-            hrNum=convert_to_int(state["hrnum"]),
             altitude=convert_to_float(state["altitude"]),
             azimuth=convert_to_float(state["azimuth"]),
             ra=convert_to_float(state["ra"]),
             decl=convert_to_float(state["dec"]),
+            focus=convert_to_float(state["focus"]),
+            motionState=convert_to_int(state["motion_state"]),
+            powerState=convert_to_int(state["power_state"]) != 0,
         )
 
     async def telemetry_loop(self):
@@ -373,7 +379,6 @@ class DIMMCSC(salobj.ConfigurableCsc):
                 self.log.debug(f"Controller running? {self.controller_running}")
 
                 state_topic = self.prepare_status_telemetry(state)
-                state_topic = self.clean_topic("tel_status", state_topic)
                 try:
                     await self.tel_status.set_write(**state_topic)
                 except ValueError:
@@ -386,12 +391,9 @@ class DIMMCSC(salobj.ConfigurableCsc):
                     )
                     break
 
-                # TODO: DM-48873 Remove the `hasattr` condition when cycle 39
-                # XML is no longer in service.
-                if hasattr(self, "tel_ameba"):
-                    self.log.debug("Collecting AMEBA state.")
-                    ameba_topic = await self.controller.get_ameba()
-                    await self.tel_ameba.set_write(**ameba_topic)
+                self.log.debug("Collecting AMEBA state.")
+                ameba_topic = await self.controller.get_ameba()
+                await self.tel_ameba.set_write(**ameba_topic)
 
                 await asyncio.sleep(self.heartbeat_interval)
         except Exception:
@@ -455,9 +457,6 @@ class DIMMCSC(salobj.ConfigurableCsc):
                         converted_data["timestamp"] + self.measurement_validity
                     )
                     converted_data["expiresIn"] = self.measurement_validity
-                    converted_data = self.clean_topic(
-                        "evt_dimmMeasurement", converted_data
-                    )
 
                     await self.evt_dimmMeasurement.set_write(**converted_data)
                 await asyncio.sleep(self.heartbeat_interval)
@@ -472,46 +471,23 @@ class DIMMCSC(salobj.ConfigurableCsc):
                 )
                 break
 
-    def clean_topic(self, topic_name, kwargs):
-        """Adjusts the state_topic dictionary to conform with the XML schema.
-
-        Adds the missing keys from the state_topic dictionary, setting
-        those to the default of the correct data type. Removes keys from
-        the dictionary that are not part of the schema.
-
-        TODO: DM-48873 remove this function and all calls to it.
+    async def do_controllerCommand(self, data):
+        """Send a generic command string.
 
         Parameters
         ----------
-        topic_name : str
-            The name of the topic for the SAL schema to apply.
-
-        kwargs : dict[str, Any]
-            The dictionary to be cleaned up.
-
-        Returns
-        -------
-        dict[str, Any]
-            The cleaned dictionary.
+        data : `salobj.BaseMsgType`
+            Contains the data as defined in the SAL XML file.
         """
-        topic_attributes = (
-            set(self.salinfo.metadata.topic_info[topic_name].field_info.keys())
-            if hasattr(self.salinfo, "metadata")
-            else set(self.salinfo.component_info.topics[topic_name].fields.keys())
-        )
-
-        cleaned_dict = dict(
-            [(key, value) for key, value in kwargs.items() if key in topic_attributes]
-        )
-
-        return cleaned_dict
+        self.assert_enabled()
+        raise salobj.ExpectedError("Not implemented yet.")
 
     async def do_gotoAltAz(self, data):
         """Move to Alt/AZ position.
 
         Parameters
         ----------
-        data : `salobj.type_hints.BaseDdsDataType`
+        data : `salobj.BaseMsgType`
             Contains the data as defined in the SAL XML file.
         """
         self.assert_enabled()
@@ -522,7 +498,7 @@ class DIMMCSC(salobj.ConfigurableCsc):
 
         Parameters
         ----------
-        data : `salobj.type_hints.BaseDdsDataType`
+        data : `salobj.BaseMsgType`
             Contains the data as defined in the SAL XML file.
         """
         self.assert_enabled()
@@ -533,7 +509,29 @@ class DIMMCSC(salobj.ConfigurableCsc):
 
         Parameters
         ----------
-        data : `salobj.type_hints.BaseDdsDataType`
+        data : `salobj.BaseMsgType`
+            Contains the data as defined in the SAL XML file.
+        """
+        self.assert_enabled()
+        raise salobj.ExpectedError("Not implemented yet.")
+
+    async def do_park(self, data):
+        """Stop observations and park the telescope.
+
+        Parameters
+        ----------
+        data : `salobj.BaseMsgType`
+            Contains the data as defined in the SAL XML file.
+        """
+        self.assert_enabled()
+        raise salobj.ExpectedError("Not implemented yet.")
+
+    async def do_recover(self, data):
+        """Run a predefined internal recovery sequence.
+
+        Parameters
+        ----------
+        data : `salobj.BaseMsgType`
             Contains the data as defined in the SAL XML file.
         """
         self.assert_enabled()
@@ -544,7 +542,7 @@ class DIMMCSC(salobj.ConfigurableCsc):
 
         Parameters
         ----------
-        data : `salobj.type_hints.BaseDdsDataType`
+        data : `salobj.BaseMsgType`
             Contains the data as defined in the SAL XML file.
         """
         self.assert_enabled()
@@ -556,7 +554,7 @@ class DIMMCSC(salobj.ConfigurableCsc):
 
         Parameters
         ----------
-        data : `salobj.type_hints.BaseDdsDataType`
+        data : `salobj.BaseMsgType`
             Contains the data as defined in the SAL XML file.
         """
         self.assert_enabled()
@@ -567,7 +565,7 @@ class DIMMCSC(salobj.ConfigurableCsc):
 
         Parameters
         ----------
-        data : `salobj.type_hints.BaseDdsDataType`
+        data : `salobj.BaseMsgType`
             Contains the data as defined in the SAL XML file.
         """
         self.assert_enabled()

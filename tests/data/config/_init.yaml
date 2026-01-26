@@ -4,6 +4,18 @@ instances:
     controller: astelco
     measurement_validity: 300.0
     config:
+      master:
+        host: localhost
+        port: 16500
+        auto_auth: false
+        user: admin
+        password: admin
+      meteo:
+        host: localhost
+        port: 16301
+        auto_auth: false
+        user: admin
+        password: admin
       avg_seeing: 0.5
       std_seeing: 0.1
       chance_failure: 0.0

@@ -366,21 +366,31 @@ class MockAstelcoDIMM(tcpip.OneClientServer):
           until unacceptable weather data is set.
     """
 
-    def __init__(self, port, log, require_authentication):
+    def __init__(self, port, log, require_authentication, dimm_state=None):
         self.require_authentication = require_authentication
 
         self.authenticated = not require_authentication
 
         self.command_loop_task = utils.make_done_future()
 
-        self.config = Config()
-        self.ameba = AmebaModule()
-        self.dimm = DIMMModule()
-        self.dome = DomeModule()
-        self.meteo = MeteoModule()
-        self.scope = ScopeModule()
-        self.weather = WeatherModule()
-        self.sky = SkyModule()
+        if dimm_state:
+            self.config = dimm_state.config
+            self.ameba = dimm_state.ameba
+            self.dimm = dimm_state.dimm
+            self.dome = dimm_state.dome
+            self.meteo = dimm_state.meteo
+            self.scope = dimm_state.scope
+            self.weather = dimm_state.weather
+            self.sky = dimm_state.sky
+        else:
+            self.config = Config()
+            self.ameba = AmebaModule()
+            self.dimm = DIMMModule()
+            self.dome = DomeModule()
+            self.meteo = MeteoModule()
+            self.scope = ScopeModule()
+            self.weather = WeatherModule()
+            self.sky = SkyModule()
         self.auto_loop_task = utils.make_done_future()
         # Slew time between targets (seconds).
         self.slew_duration = 5
@@ -413,6 +423,18 @@ class MockAstelcoDIMM(tcpip.OneClientServer):
             log=log,
             connect_callback=self.connect_callback,
             terminator=TERMINATOR,
+        )
+
+    def get_dimm_state(self):
+        return types.SimpleNamespace(
+            config=self.config,
+            ameba=self.ameba,
+            dimm=self.dimm,
+            dome=self.dome,
+            meteo=self.meteo,
+            scope=self.scope,
+            weather=self.weather,
+            sky=self.sky,
         )
 
     async def auto_loop(self):

@@ -27,7 +27,7 @@ CONFIG_SCHEMA = yaml.safe_load(
     """
 $schema: http://json-schema.org/draft-07/schema#
 $id: https://github.com/lsst-ts/ts_dimm/blob/master/python/lsst/ts/dimm/config_schema.py
-title: DIMM v3
+title: DIMM v4
 description: Schema for DIMM configuration files
 type: object
 properties:
