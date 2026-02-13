@@ -363,6 +363,29 @@ class DIMMCSC(salobj.ConfigurableCsc):
             powerState=convert_to_int(state["power_state"]) != 0,
         )
 
+    def prepare_dome_telemetry(self, dome_telemetry):
+        """Prepare dome telemetry values for publishing."""
+        return dict(
+            status=convert_to_int(dome_telemetry.get("status", -1)),
+            position=convert_to_float(dome_telemetry.get("position", float("nan"))),
+            positionSideA=convert_to_float(
+                dome_telemetry.get("position_sidea", float("nan"))
+            ),
+            positionSideB=convert_to_float(
+                dome_telemetry.get("position_sideb", float("nan"))
+            ),
+            temperature=convert_to_float(
+                dome_telemetry.get("temperature", float("nan"))
+            ),
+            powerState=convert_to_int(dome_telemetry.get("power_state", 0)) != 0,
+            zenithDistanceA=convert_to_float(
+                dome_telemetry.get("zenith_distance_a", float("nan"))
+            ),
+            zenithDistanceB=convert_to_float(
+                dome_telemetry.get("zenith_distance_b", float("nan"))
+            ),
+        )
+
     async def telemetry_loop(self):
         """Telemetry loop coroutine. This method should only be running if the
         component is enabled. It will get the state of the controller and
@@ -394,6 +417,15 @@ class DIMMCSC(salobj.ConfigurableCsc):
                 self.log.debug("Collecting AMEBA state.")
                 ameba_topic = await self.controller.get_ameba()
                 await self.tel_ameba.set_write(**ameba_topic)
+
+                self.log.debug("Collecting dome state.")
+                dome_topic = self.prepare_dome_telemetry(
+                    await self.controller.get_dome_telemetry()
+                )
+                try:
+                    await self.tel_dome.set_write(**dome_topic)
+                except ValueError:
+                    self.log.debug(f"Ignoring bad dome state {dome_topic}")
 
                 await asyncio.sleep(self.heartbeat_interval)
         except Exception:

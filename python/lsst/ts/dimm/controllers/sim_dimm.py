@@ -24,6 +24,7 @@ import asyncio
 import numpy as np
 import yaml
 from lsst.ts import utils
+from lsst.ts.xml.enums.DIMM import Dome
 
 from .base_dimm import AutomationMode, BaseDIMM, DIMMStatus
 
@@ -139,11 +140,34 @@ properties:
     async def start(self):
         """Start DIMM. Overwrites method from base class."""
         self.status["status"] = DIMMStatus["RUNNING"]
+        self.dome_telemetry.update(
+            dict(
+                status=int(Dome.Opened),
+                position=1.0,
+                position_sidea=1.0,
+                position_sideb=1.0,
+                temperature=0.0,
+                powerState=True,
+                zenith_distance_a=90.0,
+                zenith_distance_b=90.0,
+            )
+        )
         self.measurement_loop = asyncio.create_task(self.generate_measurements())
 
     async def stop(self):
         """Stop DIMM. Overwrites method from base class."""
         self.measurement_loop.cancel()
+        self.dome_telemetry.update(
+            dict(
+                status=int(Dome.Closed),
+                position=0.0,
+                position_sidea=0.0,
+                position_sideb=0.0,
+                power_state=False,
+                zenith_distance_a=0.0,
+                zenith_distance_b=0.0,
+            )
+        )
         self.status["status"] = DIMMStatus["INITIALIZED"]
 
     async def set_automation_mode(self, mode: AutomationMode) -> None:

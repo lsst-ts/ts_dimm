@@ -70,6 +70,16 @@ class BaseDIMM(abc.ABC):
             "startTime": 0,
             "finishTime": 0,
         }
+        self.dome_telemetry = {
+            "status": -1,
+            "position": float("nan"),
+            "positionSideA": float("nan"),
+            "positionSideB": float("nan"),
+            "temperature": float("nan"),
+            "powerState": False,
+            "zenithDistanceA": float("nan"),
+            "zenithDistanceB": float("nan"),
+        }
         self.log = log.getChild(type(self).__name__)
         self.simulate = simulate
 
@@ -129,6 +139,30 @@ class BaseDIMM(abc.ABC):
             Dictionary with AMEBA status.
         """
         return self.ameba
+
+    async def get_dome_telemetry(self):
+        """Get the dome telemetry.
+
+        Dome telemetry includes the following items:
+         * Status, one of the Dome enumeration items:
+           - Undefined
+           - Closed
+           - Opened
+           - Intermediate
+         * Position of the dome. (0 = fully closed; 1 = fully open)
+         * Position of dome side A. (0 = fully closed; 1 = fully open)
+         * Position of dome side B. (0 = fully closed; 1 = fully open)
+         * Dome temperature. (°C)
+         * Dome power state, true if the dome is currently powered up.
+         * Zenith distance of side A. (0° = fully closed; 90° = fully opened)
+         * Zenith distance of side B. (0° = fully closed; 90° = fully opened)
+
+        Returns
+        -------
+        dome_telemetry : dict
+            Dictionary with dome status.
+        """
+        return self.dome_telemetry
 
     async def set_automation_mode(self, mode: AutomationMode) -> None:
         """Sets the DIMM to off (0), automatic (1), or manual (2) operation.
