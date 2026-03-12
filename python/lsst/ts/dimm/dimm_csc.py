@@ -27,6 +27,8 @@ from zoneinfo import ZoneInfo
 
 from lsst.ts import salobj, utils
 from lsst.ts.dimm import controllers
+from lsst.ts.xml.sal_enums import State
+from lsst.ts.xml.type_hints import BaseMsgType
 
 from . import __version__
 from .config_schema import CONFIG_SCHEMA
@@ -458,6 +460,9 @@ class DIMMCSC(salobj.ConfigurableCsc):
 
             # Send the command
             await self.controller.set_automation_mode(AutomationMode.OFF)
+            if self.summary_state == State.ENABLED:
+                # Do state transition if this happened in enabled state
+                await self.do_disable(BaseMsgType())
 
             # Make sure we aren't going to get a sleep of zero on the
             # next run through the loop.
