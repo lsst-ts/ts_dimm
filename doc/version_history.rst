@@ -1,3 +1,13 @@
+v0.10.0 (2026-05-07)
+====================
+
+New Features
+------------
+
+- Added dome telemetry. (`OSW-1833 <https://rubinobs.atlassian.net//browse/OSW-1833>`_)
+- Make CSC change state when turning itself off in the morning if in ENABLED state. (`OSW-1967 <https://rubinobs.atlassian.net//browse/OSW-1967>`_)
+
+
 v0.9.8 (2026-01-26)
 ===================
 
