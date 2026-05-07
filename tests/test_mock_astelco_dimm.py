@@ -29,6 +29,7 @@ from lsst.ts import dimm, tcpip, utils
 from lsst.ts.dimm.controllers.astelco_enums import (
     TERMINATOR,
     AmebaMode,
+    PowerState,
     RainState,
     SkyStatus,
     VariableType,
@@ -262,6 +263,14 @@ class MockAstelcoDIMMTestCase(unittest.IsolatedAsyncioTestCase):
             (
                 "WEATHER.RAIN;WEATHER.RAIN!TYPE",
                 (RainState.PRECIPITATION, VariableType.INT),
+            ),
+            (
+                "DOME.POSITION;DOME.POSITION_SIDEA;DOME.POSITION_SIDEB;DOME.TEMPERATURE",
+                (0.6, 0.25, 0.75, 12.3),
+            ),
+            (
+                "DOME.POWER_STATE;DOME.POWER_STATE!TYPE",
+                (PowerState.POWERED_UP, VariableType.INT),
             ),
         ):
             command = await self.run_command("GET", arg)

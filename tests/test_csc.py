@@ -132,6 +132,43 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
 
             assert data2.fwhm != data.fwhm
 
+    async def test_astelco_dimm_dome_telemetry(self):
+        position = 0.6
+        position_sidea = 0.25
+        position_sideb = 0.75
+        temperature = 12.3
+        async with self.make_csc(
+            initial_state=salobj.State.STANDBY,
+            config_dir=TEST_CONFIG_DIR,
+            simulation_mode=1,
+        ):
+            await salobj.set_summary_state(
+                remote=self.remote, state=salobj.State.ENABLED
+            )
+            self.csc.controller.mock_master_port.dome_telemetry.position = position
+            self.csc.controller.mock_master_port.dome_telemetry.position_sidea = (
+                position_sidea
+            )
+            self.csc.controller.mock_master_port.dome_telemetry.position_sideb = (
+                position_sideb
+            )
+            self.csc.controller.mock_master_port.dome_telemetry.temperature = (
+                temperature
+            )
+            self.csc.controller.mock_master_port.dome_telemetry.power_state = (
+                dimm.controllers.astelco_enums.PowerState.POWERED_UP
+            )
+            data = await self.assert_next_sample(
+                self.remote.tel_dome, flush=True, timeout=SHORT_TIMEOUT
+            )
+            assert 0 <= data.status <= 3
+            assert data.position == pytest.approx(position)
+            assert data.positionSideA == pytest.approx(position_sidea)
+            assert data.positionSideB == pytest.approx(position_sideb)
+            assert data.temperature == pytest.approx(temperature)
+            assert data.zenithDistanceA == pytest.approx(position_sidea * 90.0)
+            assert data.zenithDistanceB == pytest.approx(position_sideb * 90.0)
+
     async def test_astelco_dimm_fault_on_disconnect(self):
         async with self.make_csc(
             initial_state=salobj.State.STANDBY,
@@ -206,26 +243,20 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
             ):
                 self.csc.controller.set_automation_mode = AsyncMock()
 
-                await real_sleep(10)
-                self.assertEqual(long_sleeps, [60])
-                self.csc.controller.set_automation_mode.assert_awaited_with(
-                    dimm.controllers.base_dimm.AutomationMode.OFF
-                )
-
-                self.remote.evt_summaryState.flush()
-                await salobj.set_summary_state(
+                await self.assert_next_summary_state(
+                    state=salobj.State.ENABLED,
+                    flush=False,
                     remote=self.remote,
-                    state=salobj.State.STANDBY,
                 )
                 await self.assert_next_summary_state(
                     state=salobj.State.DISABLED,
                     flush=False,
                     remote=self.remote,
                 )
-                await self.assert_next_summary_state(
-                    state=salobj.State.STANDBY,
-                    flush=False,
-                    remote=self.remote,
+
+                self.assertEqual(long_sleeps, [60])
+                self.csc.controller.set_automation_mode.assert_awaited_with(
+                    dimm.controllers.base_dimm.AutomationMode.OFF
                 )
 
     async def test_ameba_off_tomorrow(self):
@@ -248,26 +279,20 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
             ):
                 self.csc.controller.set_automation_mode = AsyncMock()
 
-                await real_sleep(10)
-                self.assertEqual(long_sleeps, [86400 - 60])
-                self.csc.controller.set_automation_mode.assert_awaited_with(
-                    dimm.controllers.base_dimm.AutomationMode.OFF
-                )
-
-                self.remote.evt_summaryState.flush()
-                await salobj.set_summary_state(
+                await self.assert_next_summary_state(
+                    state=salobj.State.ENABLED,
+                    flush=False,
                     remote=self.remote,
-                    state=salobj.State.STANDBY,
                 )
                 await self.assert_next_summary_state(
                     state=salobj.State.DISABLED,
                     flush=False,
                     remote=self.remote,
                 )
-                await self.assert_next_summary_state(
-                    state=salobj.State.STANDBY,
-                    flush=False,
-                    remote=self.remote,
+
+                self.assertEqual(long_sleeps, [86400 - 60])
+                self.csc.controller.set_automation_mode.assert_awaited_with(
+                    dimm.controllers.base_dimm.AutomationMode.OFF
                 )
 
     async def test_ameba_off_on_disable(self):

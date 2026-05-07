@@ -28,7 +28,7 @@ from statistics import mean
 
 import yaml
 from lsst.ts.utils import make_done_future, tai_from_utc
-from lsst.ts.xml.enums.DIMM import ScopeMotion
+from lsst.ts.xml.enums.DIMM import Dome, ScopeMotion
 
 from ..utils import dict_to_namespace
 from .astelco_enums import RainState, ScopeMotionState, SkyStatus
@@ -38,6 +38,10 @@ from .open_tpl_connection import OpenTplConnection
 
 # Interval between status requests (seconds)
 STATUS_INTERVAL = 1.0
+
+# Factor to convert dome open value [0-1] to zenith distance
+# (0 == 0°, 1 == 90°)
+ZENITH_DISTANCE_FACTOR = 90.0
 
 
 def return_string():
@@ -258,6 +262,57 @@ definitions:
             self.status["status"] = DIMMStatus["ERROR"]
         finally:
             self.log.debug("AMEBA loop ends")
+
+    async def get_dome_telemetry(self):
+        """Get dome telemetry.
+
+        Dome telemetry includes the following items:
+         * Status, one of the Dome enumeration items:
+           - Undefined
+           - Closed
+           - Opened
+           - Intermediate
+         * Position of the dome. (0 = fully closed; 1 = fully open)
+         * Position of dome side A. (0 = fully closed; 1 = fully open)
+         * Position of dome side B. (0 = fully closed; 1 = fully open)
+         * Dome temperature. (°C)
+         * Dome power state, true if the dome is currently powered up.
+         * Zenith distance of side A. (0° = fully closed; 90° = fully opened)
+         * Zenith distance of side B. (0° = fully closed; 90° = fully opened)
+        """
+        dome_cmd = await self.master.run_command(
+            "GET",
+            "DOME.POSITION;DOME.POSITION_SIDEA;DOME.POSITION_SIDEB;"
+            "DOME.TEMPERATURE;DOME.POWER_STATE",
+        )
+        position = dome_cmd.get_float("DOME.POSITION")
+        position_sidea = dome_cmd.get_float("DOME.POSITION_SIDEA")
+        position_sideb = dome_cmd.get_float("DOME.POSITION_SIDEB")
+        temperature = dome_cmd.get_float("DOME.TEMPERATURE")
+        power_state = dome_cmd.get_int("DOME.POWER_STATE", bad_value=0)
+
+        if math.isnan(position):
+            status = Dome.Undefined
+        elif position <= 0.0:
+            status = Dome.Closed
+        elif position >= 1.0:
+            status = Dome.Opened
+        else:
+            status = Dome.Stated
+
+        def zenith_distance(value):
+            return math.nan if math.isnan(value) else value * ZENITH_DISTANCE_FACTOR
+
+        return dict(
+            status=int(status),
+            position=position,
+            position_sidea=position_sidea,
+            position_sideb=position_sideb,
+            temperature=temperature,
+            power_state=power_state,
+            zenith_distance_a=zenith_distance(position_sidea),
+            zenith_distance_b=zenith_distance(position_sideb),
+        )
 
     async def connect(self):
         """Connect to the DIMM controller's TCP/IP."""

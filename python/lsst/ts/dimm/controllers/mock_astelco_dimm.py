@@ -206,11 +206,11 @@ class DIMMModule(BaseToplevelModule):
 
 
 class DomeModule(BaseToplevelModule):
-    position = 0.0
-    position_sidea = 0.0
-    position_sideb = 0.0
-    temperature = 0.0
-    power_state = PowerState.PARKED
+    position = 0.6
+    position_sidea = 0.25
+    position_sideb = 0.75
+    temperature = 12.3
+    power_state = PowerState.POWERED_UP
 
 
 class MeteoModule(BaseToplevelModule):
@@ -377,7 +377,7 @@ class MockAstelcoDIMM(tcpip.OneClientServer):
             self.config = dimm_state.config
             self.ameba = dimm_state.ameba
             self.dimm = dimm_state.dimm
-            self.dome = dimm_state.dome
+            self.dome_telemetry = dimm_state.dome
             self.meteo = dimm_state.meteo
             self.scope = dimm_state.scope
             self.weather = dimm_state.weather
@@ -386,7 +386,7 @@ class MockAstelcoDIMM(tcpip.OneClientServer):
             self.config = Config()
             self.ameba = AmebaModule()
             self.dimm = DIMMModule()
-            self.dome = DomeModule()
+            self.dome_telemetry = DomeModule()
             self.meteo = MeteoModule()
             self.scope = ScopeModule()
             self.weather = WeatherModule()
@@ -414,7 +414,15 @@ class MockAstelcoDIMM(tcpip.OneClientServer):
         )
 
         # List of modules that SET and GET may access
-        self.module_names = {"ameba", "dimm", "scope", "meteo", "weather", "sky"}
+        self.module_names = {
+            "ameba",
+            "dimm",
+            "dome",
+            "scope",
+            "meteo",
+            "weather",
+            "sky",
+        }
 
         super().__init__(
             name="MockAstelcoDIMM",
@@ -430,7 +438,7 @@ class MockAstelcoDIMM(tcpip.OneClientServer):
             config=self.config,
             ameba=self.ameba,
             dimm=self.dimm,
-            dome=self.dome,
+            dome=self.dome_telemetry,
             meteo=self.meteo,
             scope=self.scope,
             weather=self.weather,
@@ -446,16 +454,16 @@ class MockAstelcoDIMM(tcpip.OneClientServer):
         * There is a pause for slewing, but the new target ra, dec, az,
           and alt are set at the start of each slew and not updated
           at any other time (except when parking).
-        * Dome position_sidea, position_side_b and temperature are always 0.
+        * Dome position_sidea, position_sideb and temperature are always 0.
         * Parking and unparking the telescope is instantaneous.
         * Opening and closing the dome is instantaneous.
         * The AMEBA.STATE values are probably not very realistic.
         """
         try:
             self.log.info("Automatic loop begins")
-            self.dome.power_state = PowerState.POWERED_UP
+            self.dome_telemetry.power_state = PowerState.POWERED_UP
             self.scope.power_state = PowerState.POWERED_UP
-            self.dome.position = self.scope.az
+            self.dome_telemetry.position = self.scope.az
             await self.set_measurement()
             set_measurement_task = asyncio.create_task(self.set_measurement())
             while True:
@@ -467,13 +475,13 @@ class MockAstelcoDIMM(tcpip.OneClientServer):
             self.log.exception("Automatic loop failed")
         finally:
             self.log.info("Automatic loop ends")
-            self.dome.position = 0
+            self.dome_telemetry.position = 0
             self.scope.motion_state = ScopeMotionState.PARKED
             self.scope.ra = ScopeParkedPosition.ra
             self.scope.dec = ScopeParkedPosition.dec
             self.scope.az = ScopeParkedPosition.az
             self.scope.alt = ScopeParkedPosition.alt
-            self.dome.power_state = PowerState.PARKED
+            self.dome_telemetry.power_state = PowerState.PARKED
             self.scope.power_state = PowerState.PARKED
 
     async def set_measurement(self):
@@ -830,7 +838,10 @@ class MockAstelcoDIMM(tcpip.OneClientServer):
             raise CommandError(f"{attr_names[0]} not a valid module name")
         attr = self
         for attr_name in attr_names:
-            attr = getattr(attr, attr_name)
+            try:
+                attr = getattr(attr, attr_name)
+            except AttributeError:
+                attr = getattr(attr, f"{attr_name}_telemetry")
         if isinstance(attr, str):
             return f'"{attr}"'
         else:
