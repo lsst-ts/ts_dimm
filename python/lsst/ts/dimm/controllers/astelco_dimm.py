@@ -486,7 +486,7 @@ definitions:
 
     async def dew_point_callback(self, data):
         """Send dew point (C) to the DIMM."""
-        if data.dewPoint > -99.0:
+        if data.dewPointItem > -99.0:
             await self.meteo.run_command("SET", f"WEATHER.TEMP_DEW={data.dewPoint}")
 
     async def precipitation_callback(self, data):
