@@ -409,8 +409,7 @@ class MockAstelcoDIMM(tcpip.OneClientServer):
         )
         # list of complied regex: do_x method to call
         self.dispatchers = tuple(
-            (re.compile(regex, re.IGNORECASE), method)
-            for regex, method in regex_methods
+            (re.compile(regex, re.IGNORECASE), method) for regex, method in regex_methods
         )
 
         # List of modules that SET and GET may access
@@ -570,9 +569,7 @@ class MockAstelcoDIMM(tcpip.OneClientServer):
                 except CommandError as e:
                     await self.write_command_state(cmdid, "FAILED", str(e))
                 except Exception as e:
-                    self.log.exception(
-                        f"Command handler {func} failed for command {cmd_str}"
-                    )
+                    self.log.exception(f"Command handler {func} failed for command {cmd_str}")
                     await self.write_command_state(cmdid, "FAILED", str(e))
         except (asyncio.IncompleteReadError, ConnectionResetError):
             self.log.warning("Connection lost")
@@ -635,9 +632,7 @@ class MockAstelcoDIMM(tcpip.OneClientServer):
                                 int: VariableType.INT,
                                 float: VariableType.FLOAT,
                             }.get(type(value), VariableType.NULL)
-                        await self.write_data_inline(
-                            cmdid, varname_property, vartype.value
-                        )
+                        await self.write_data_inline(cmdid, varname_property, vartype.value)
                     case _:
                         await self.write_data_error(
                             cmdid=cmdid,
@@ -647,9 +642,7 @@ class MockAstelcoDIMM(tcpip.OneClientServer):
                         )
             except Exception as e:
                 self.log.warning(f"{cmdid} GET {varname} failed: {e!r}")
-                await self.write_data_error(
-                    cmdid=cmdid, varname=varname, error_code=15, message=str(e)
-                )
+                await self.write_data_error(cmdid=cmdid, varname=varname, error_code=15, message=str(e))
         await self.write_command_state(cmdid, "COMPLETE")
 
     async def do_set(self, cmdid, arg):
@@ -675,9 +668,7 @@ class MockAstelcoDIMM(tcpip.OneClientServer):
                 await self.set_field(varname, value_str)
                 await self.write_data_ok(cmdid, varname)
             except Exception as e:
-                await self.write_data_error(
-                    cmdid, varname=varname, error_code=15, message=str(e)
-                )
+                await self.write_data_error(cmdid, varname=varname, error_code=15, message=str(e))
         await self.write_command_state(cmdid, "COMPLETE")
         if self.ameba.mode == AmebaMode.AUTO and self.can_open():
             if self.auto_loop_task.done():
@@ -747,8 +738,7 @@ class MockAstelcoDIMM(tcpip.OneClientServer):
             Optional additional message.
         """
         await self.write_msg(
-            f"{cmdid} DATA ERROR {varname.upper()} FAILED "
-            f"{error_code}{format_message(message)}"
+            f"{cmdid} DATA ERROR {varname.upper()} FAILED {error_code}{format_message(message)}"
         )
 
     async def write_data_inline(self, cmdid, varname, value):

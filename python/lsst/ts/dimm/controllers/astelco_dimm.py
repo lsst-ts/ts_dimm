@@ -27,6 +27,7 @@ from collections import defaultdict
 from statistics import mean
 
 import yaml
+
 from lsst.ts.utils import make_done_future, tai_from_utc
 from lsst.ts.xml.enums.DIMM import Dome, ScopeMotion
 
@@ -246,9 +247,7 @@ definitions:
                 self.ameba["mode"] = status_cmd.get_int("AMEBA.MODE", bad_value=-1)
                 self.ameba["state"] = status_cmd.get_int("AMEBA.STATE", bad_value=-1)
                 self.ameba["sunAltitude"] = status_cmd.get_float("AMEBA.SUN_ALT")
-                self.ameba["condition"] = status_cmd.get_int(
-                    "AMEBA.CONDITION", bad_value=-1
-                )
+                self.ameba["condition"] = status_cmd.get_int("AMEBA.CONDITION", bad_value=-1)
                 self.ameba["startTime"] = status_cmd.get_float("AMEBA.START_TIME")
                 self.ameba["finishTime"] = status_cmd.get_float("AMEBA.FINISH_TIME")
                 if not math.isnan(self.ameba["startTime"]):
@@ -282,8 +281,7 @@ definitions:
         """
         dome_cmd = await self.master.run_command(
             "GET",
-            "DOME.POSITION;DOME.POSITION_SIDEA;DOME.POSITION_SIDEB;"
-            "DOME.TEMPERATURE;DOME.POWER_STATE",
+            "DOME.POSITION;DOME.POSITION_SIDEA;DOME.POSITION_SIDEB;DOME.TEMPERATURE;DOME.POWER_STATE",
         )
         position = dome_cmd.get_float("DOME.POSITION")
         position_sidea = dome_cmd.get_float("DOME.POSITION_SIDEA")
@@ -415,9 +413,7 @@ definitions:
 
             seeing_cmd = await self.master.run_command(
                 "GET",
-                "DIMM.SEEING;DIMM.AIRMASS;"
-                "DIMM.FLUX_LEFT;DIMM.FLUX_RIGHT;"
-                "DIMM.STREHL_LEFT;DIMM.STREHL_RIGHT",
+                "DIMM.SEEING;DIMM.AIRMASS;DIMM.FLUX_LEFT;DIMM.FLUX_RIGHT;DIMM.STREHL_LEFT;DIMM.STREHL_RIGHT",
             )
 
             # seeing_lowfreq = AstelcoCommand("GET", "DIMM.SEEING_LOWFREQ")
@@ -458,7 +454,7 @@ definitions:
         if data.numChannels > 0:
             await self.meteo.run_command(
                 "SET",
-                f"WEATHER.TEMP_AMB={mean(data.temperatureItem[:data.numChannels])}",
+                f"WEATHER.TEMP_AMB={mean(data.temperatureItem[: data.numChannels])}",
             )
 
     async def humidity_callback(self, data):
@@ -472,7 +468,7 @@ definitions:
             # 100.
             await self.meteo.run_command(
                 "SET",
-                f"WEATHER.PRESSURE={mean(data.pressureItem[:data.numChannels])/100.0}",
+                f"WEATHER.PRESSURE={mean(data.pressureItem[: data.numChannels]) / 100.0}",
             )
 
     async def air_flow_callback(self, data):
