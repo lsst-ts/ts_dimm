@@ -264,13 +264,9 @@ class OpenTplConnection:
             port = self.config.port
 
         self.log.info(f"Connecting to Astelco DIMM at {host}:{port}")
-        self.connect_task = asyncio.create_task(
-            asyncio.open_connection(host=host, port=port)
-        )
+        self.connect_task = asyncio.create_task(asyncio.open_connection(host=host, port=port))
 
-        self.reader, self.writer = await asyncio.wait_for(
-            self.connect_task, timeout=self.connection_timeout
-        )
+        self.reader, self.writer = await asyncio.wait_for(self.connect_task, timeout=self.connection_timeout)
 
         # Read welcome message
         reply = await asyncio.wait_for(self.read_reply(), timeout=self.read_timeout)
@@ -279,9 +275,7 @@ class OpenTplConnection:
 
         if not self.config.auto_auth:
             # Authenticate
-            await self.write_cmdstr(
-                f'AUTH PLAIN "{self.config.user}" "{self.config.password}"'
-            )
+            await self.write_cmdstr(f'AUTH PLAIN "{self.config.user}" "{self.config.password}"')
 
         # Get reply from auth. This is published even in auto_auth mode
         reply = await asyncio.wait_for(self.read_reply(), timeout=self.read_timeout)
@@ -385,9 +379,7 @@ class OpenTplConnection:
                         try:
                             handler(command=command, cmdid=cmdid, **kwargs)
                         except Exception:
-                            self.log.exception(
-                                f"Reply handler {handler} failed on {reply!r}"
-                            )
+                            self.log.exception(f"Reply handler {handler} failed on {reply!r}")
                         if command is not None and command.done_task.done():
                             self.running_commands.pop(cmdid)
                         break
@@ -433,16 +425,12 @@ class OpenTplConnection:
                 if not command.done_task.done():
                     command.done_task.set_exception(CommandError(message))
                 else:
-                    self.log.warning(
-                        f"Cannot set {command} to error; it already finished"
-                    )
+                    self.log.warning(f"Cannot set {command} to error; it already finished")
             case "COMPLETE":
                 if not command.done_task.done():
                     command.done_task.set_result(None)
                 else:
-                    self.log.warning(
-                        f"Cannot set {command} to complete; it already finished"
-                    )
+                    self.log.warning(f"Cannot set {command} to complete; it already finished")
 
     def handle_data_error(self, command, cmdid, name, error):
         """Handle a DATA ERROR reply.
@@ -499,9 +487,7 @@ class OpenTplConnection:
         assert_command_not_none(cmdid=cmdid, command=command)
         first_word = value.split()[0]
         if first_word in BadDataReplies:
-            self.log.warning(
-                f"GET {name} failed: {value!r}; treating the value as unknown"
-            )
+            self.log.warning(f"GET {name} failed: {value!r}; treating the value as unknown")
             command.data[name] = (False, value)
         else:
             if first_word == "NULL":
@@ -557,7 +543,9 @@ class OpenTplConnection:
         log_str = (
             f"DIMM log: [{command.name} {command.arg}] "
             if command is not None
-            else f"DIMM log: [{cmdid=}] " if cmdid != 0 else "DIMM log: "
+            else f"DIMM log: [{cmdid=}] "
+            if cmdid != 0
+            else "DIMM log: "
         )
 
         log_str += f"{name}:{number} {description}"

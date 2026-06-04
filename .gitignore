@@ -24,3 +24,4 @@ tests/.tests
 # ignote pypi files.
 *.egg-info/
 towncrier.toml
+.ruff.toml
