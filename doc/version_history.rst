@@ -1,3 +1,12 @@
+v0.10.1 (2026-06-04)
+====================
+
+Bug Fixes
+---------
+
+- Fixed incorrect dewpoint telemetry. (`OSW-2390 <https://rubinobs.atlassian.net//browse/OSW-2390>`_)
+
+
 v0.10.0 (2026-05-07)
 ====================
 
