@@ -169,15 +169,11 @@ class DIMMCSC(salobj.ConfigurableCsc):
             if instance["sal_index"] == self.salinfo.index:
                 break
         else:
-            raise salobj.ExpectedError(
-                f"No config found for sal_index={self.salinfo.index}"
-            )
+            raise salobj.ExpectedError(f"No config found for sal_index={self.salinfo.index}")
 
         settings = types.SimpleNamespace(**instance)
         controller_class = available_controllers[settings.controller]
-        self.controller = controller_class(
-            log=self.log, simulate=self.simulation_mode != 0
-        )
+        self.controller = controller_class(log=self.log, simulate=self.simulation_mode != 0)
         self.measurement_validity = settings.measurement_validity
 
         if settings.controller == "astelco":
@@ -233,9 +229,7 @@ class DIMMCSC(salobj.ConfigurableCsc):
         self.seeing_loop_task = asyncio.create_task(self.seeing_loop())
 
         if self.dimm_off_in_morning_task.done():
-            self.dimm_off_in_morning_task = asyncio.create_task(
-                self.turn_dimm_off_in_morning()
-            )
+            self.dimm_off_in_morning_task = asyncio.create_task(self.turn_dimm_off_in_morning())
 
         await super().end_start(id_data)
 
@@ -265,9 +259,7 @@ class DIMMCSC(salobj.ConfigurableCsc):
             Command ID and data
         """
         if self.dimm_off_in_morning_task.done():
-            self.dimm_off_in_morning_task = asyncio.create_task(
-                self.turn_dimm_off_in_morning()
-            )
+            self.dimm_off_in_morning_task = asyncio.create_task(self.turn_dimm_off_in_morning())
         await super().end_enable(id_data)
 
     async def begin_disable(self, id_data):
@@ -370,22 +362,12 @@ class DIMMCSC(salobj.ConfigurableCsc):
         return dict(
             status=convert_to_int(dome_telemetry.get("status", -1)),
             position=convert_to_float(dome_telemetry.get("position", float("nan"))),
-            positionSideA=convert_to_float(
-                dome_telemetry.get("position_sidea", float("nan"))
-            ),
-            positionSideB=convert_to_float(
-                dome_telemetry.get("position_sideb", float("nan"))
-            ),
-            temperature=convert_to_float(
-                dome_telemetry.get("temperature", float("nan"))
-            ),
+            positionSideA=convert_to_float(dome_telemetry.get("position_sidea", float("nan"))),
+            positionSideB=convert_to_float(dome_telemetry.get("position_sideb", float("nan"))),
+            temperature=convert_to_float(dome_telemetry.get("temperature", float("nan"))),
             powerState=convert_to_int(dome_telemetry.get("power_state", 0)) != 0,
-            zenithDistanceA=convert_to_float(
-                dome_telemetry.get("zenith_distance_a", float("nan"))
-            ),
-            zenithDistanceB=convert_to_float(
-                dome_telemetry.get("zenith_distance_b", float("nan"))
-            ),
+            zenithDistanceA=convert_to_float(dome_telemetry.get("zenith_distance_a", float("nan"))),
+            zenithDistanceB=convert_to_float(dome_telemetry.get("zenith_distance_b", float("nan"))),
         )
 
     async def telemetry_loop(self):
@@ -411,9 +393,7 @@ class DIMMCSC(salobj.ConfigurableCsc):
 
                 if state["status"] == DIMMStatus["ERROR"]:
                     self.log.error("DIMM reported error state.")
-                    await self.fault(
-                        code=TELEMETRY_LOOP_DONE, report="DIMM reported error state."
-                    )
+                    await self.fault(code=TELEMETRY_LOOP_DONE, report="DIMM reported error state.")
                     break
 
                 self.log.debug("Collecting AMEBA state.")
@@ -421,9 +401,7 @@ class DIMMCSC(salobj.ConfigurableCsc):
                 await self.tel_ameba.set_write(**ameba_topic)
 
                 self.log.debug("Collecting dome state.")
-                dome_topic = self.prepare_dome_telemetry(
-                    await self.controller.get_dome_telemetry()
-                )
+                dome_topic = self.prepare_dome_telemetry(await self.controller.get_dome_telemetry())
                 try:
                     await self.tel_dome.set_write(**dome_topic)
                 except ValueError:
@@ -450,9 +428,7 @@ class DIMMCSC(salobj.ConfigurableCsc):
 
         while self.disabled_or_enabled:
             now = datetime.datetime.now(tz)
-            end_time = datetime.datetime.combine(
-                now.date(), datetime.time(time_to_turn_off, 0), tzinfo=tz
-            )
+            end_time = datetime.datetime.combine(now.date(), datetime.time(time_to_turn_off, 0), tzinfo=tz)
             if now >= end_time:
                 end_time += datetime.timedelta(days=1)
             sleep_time = (end_time - now).total_seconds()
@@ -490,9 +466,7 @@ class DIMMCSC(salobj.ConfigurableCsc):
                 # Only send telemetry if the controller is operational
                 if data is not None and self.controller_running:
                     converted_data = convert_dimm_measurement_data(data)
-                    converted_data["expiresAt"] = (
-                        converted_data["timestamp"] + self.measurement_validity
-                    )
+                    converted_data["expiresAt"] = converted_data["timestamp"] + self.measurement_validity
                     converted_data["expiresIn"] = self.measurement_validity
 
                     await self.evt_dimmMeasurement.set_write(**converted_data)
@@ -629,10 +603,7 @@ class DIMMCSC(salobj.ConfigurableCsc):
                     error_report = "Seeing loop died while in enable state."
                     await self.fault(code=SEEING_LOOP_DONE, report=error_report)
 
-                if (
-                    self.telemetry_loop_task is not None
-                    and self.telemetry_loop_task.done()
-                ):
+                if self.telemetry_loop_task is not None and self.telemetry_loop_task.done():
                     error_report = "Telemetry loop died while in enable state."
                     await self.fault(code=TELEMETRY_LOOP_DONE, report=error_report)
 

@@ -68,9 +68,7 @@ class MockAstelcoDIMMTestCase(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self) -> None:
         # Dict of command ID: command
         self.commands_dict = dict()
-        self.mock_dimm = dimm.controllers.MockAstelcoDIMM(
-            port=0, log=self.log, require_authentication=True
-        )
+        self.mock_dimm = dimm.controllers.MockAstelcoDIMM(port=0, log=self.log, require_authentication=True)
         await asyncio.wait_for(self.mock_dimm.start_task, timeout=STD_TIMEOUT)
         print(f"Mock DIMM running on port {self.mock_dimm.port}")
         self.reader, self.writer = await asyncio.wait_for(
@@ -92,10 +90,7 @@ class MockAstelcoDIMMTestCase(unittest.IsolatedAsyncioTestCase):
     @property
     def connected(self):
         return not (
-            self.reader is None
-            or self.writer is None
-            or self.reader.at_eof()
-            or self.writer.is_closing()
+            self.reader is None or self.writer is None or self.reader.at_eof() or self.writer.is_closing()
         )
 
     async def read_loop(self):
@@ -127,9 +122,7 @@ class MockAstelcoDIMMTestCase(unittest.IsolatedAsyncioTestCase):
             print(f"read_loop failed: {e!r}")
             raise
 
-    async def run_command(
-        self, name, arg, wait_done=True, should_pass=True, timeout=STD_TIMEOUT
-    ):
+    async def run_command(self, name, arg, wait_done=True, should_pass=True, timeout=STD_TIMEOUT):
         """Run one command with the specified arguments.
 
         Parameters
@@ -200,11 +193,7 @@ class MockAstelcoDIMMTestCase(unittest.IsolatedAsyncioTestCase):
 
         # Auto mode is now running; wait for two measurements
         # and check that they differ from each other.
-        measurement_timeout = (
-            STD_TIMEOUT
-            + self.mock_dimm.slew_duration
-            + self.mock_dimm.measurement_duration
-        )
+        measurement_timeout = STD_TIMEOUT + self.mock_dimm.slew_duration + self.mock_dimm.measurement_duration
         # dimm fields whose value we expect to be constant
         constant_fields = {"version"}
         # List of measurements, each a dict of field: value
@@ -216,10 +205,7 @@ class MockAstelcoDIMMTestCase(unittest.IsolatedAsyncioTestCase):
                 self.mock_dimm.auto_measurement_event.wait(),
                 timeout=measurement_timeout,
             )
-            if (
-                meas1 is not None
-                and meas1["timestamp"] == self.mock_dimm.dimm.timestamp
-            ):
+            if meas1 is not None and meas1["timestamp"] == self.mock_dimm.dimm.timestamp:
                 continue
             else:
                 n_measurements += 1

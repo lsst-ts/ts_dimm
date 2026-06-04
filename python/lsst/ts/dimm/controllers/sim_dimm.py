@@ -23,6 +23,7 @@ import asyncio
 
 import numpy as np
 import yaml
+
 from lsst.ts import utils
 from lsst.ts.xml.enums.DIMM import Dome
 
@@ -67,15 +68,11 @@ class SimDIMM(BaseDIMM):
         self.status["status"] = DIMMStatus["INITIALIZED"]
 
         if config.avg_seeing < 0.0:
-            raise IOError(
-                "Avg seeing must be larger than zero. Got %f" % config.avg_seeing
-            )
+            raise IOError("Avg seeing must be larger than zero. Got %f" % config.avg_seeing)
         self.avg_seeing = config.avg_seeing
 
         if config.std_seeing < 0.0:
-            raise IOError(
-                "Std seeing must be larger than zero. Got %f" % config.std_seeing
-            )
+            raise IOError("Std seeing must be larger than zero. Got %f" % config.std_seeing)
         self.std_seeing = config.std_seeing
 
         if not (0.0 <= config.chance_failure <= 100.0):
@@ -231,18 +228,14 @@ properties:
 
         start_time_hrnum = utils.current_tai()
         time_in_hrnum = (
-            np.random.uniform(self.time_in_target["min"], self.time_in_target["max"])
-            * 60.0
-            * 60.0
+            np.random.uniform(self.time_in_target["min"], self.time_in_target["max"]) * 60.0 * 60.0
         )
         await self.new_hrnum()
 
         while True:
             if utils.current_tai() > start_time_hrnum + time_in_hrnum:
                 start_time_hrnum = utils.current_tai()
-                time_in_hrnum = np.random.uniform(
-                    self.time_in_target["min"], self.time_in_target["max"]
-                )
+                time_in_hrnum = np.random.uniform(self.time_in_target["min"], self.time_in_target["max"])
                 await self.new_hrnum()
             measurement = await self.new_measurement()
             self.measurement_queue.append(measurement)

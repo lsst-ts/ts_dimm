@@ -28,6 +28,7 @@ from unittest.mock import AsyncMock, call, patch
 from zoneinfo import ZoneInfo
 
 import pytest
+
 from lsst.ts import dimm, salobj, utils
 from lsst.ts.xml.enums.DIMM import AmebaMode
 
@@ -109,9 +110,7 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
             config_dir=TEST_CONFIG_DIR,
             simulation_mode=1,
         ):
-            await salobj.set_summary_state(
-                remote=self.remote, state=salobj.State.ENABLED
-            )
+            await salobj.set_summary_state(remote=self.remote, state=salobj.State.ENABLED)
             data = await self.assert_next_sample(
                 self.remote.evt_dimmMeasurement, flush=True, timeout=MEAS_TIMEOUT
             )
@@ -142,25 +141,15 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
             config_dir=TEST_CONFIG_DIR,
             simulation_mode=1,
         ):
-            await salobj.set_summary_state(
-                remote=self.remote, state=salobj.State.ENABLED
-            )
+            await salobj.set_summary_state(remote=self.remote, state=salobj.State.ENABLED)
             self.csc.controller.mock_master_port.dome_telemetry.position = position
-            self.csc.controller.mock_master_port.dome_telemetry.position_sidea = (
-                position_sidea
-            )
-            self.csc.controller.mock_master_port.dome_telemetry.position_sideb = (
-                position_sideb
-            )
-            self.csc.controller.mock_master_port.dome_telemetry.temperature = (
-                temperature
-            )
+            self.csc.controller.mock_master_port.dome_telemetry.position_sidea = position_sidea
+            self.csc.controller.mock_master_port.dome_telemetry.position_sideb = position_sideb
+            self.csc.controller.mock_master_port.dome_telemetry.temperature = temperature
             self.csc.controller.mock_master_port.dome_telemetry.power_state = (
                 dimm.controllers.astelco_enums.PowerState.POWERED_UP
             )
-            data = await self.assert_next_sample(
-                self.remote.tel_dome, flush=True, timeout=SHORT_TIMEOUT
-            )
+            data = await self.assert_next_sample(self.remote.tel_dome, flush=True, timeout=SHORT_TIMEOUT)
             assert 0 <= data.status <= 3
             assert data.position == pytest.approx(position)
             assert data.positionSideA == pytest.approx(position_sidea)
@@ -175,9 +164,7 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
             config_dir=TEST_CONFIG_DIR,
             simulation_mode=1,
         ):
-            await salobj.set_summary_state(
-                remote=self.remote, state=salobj.State.ENABLED
-            )
+            await salobj.set_summary_state(remote=self.remote, state=salobj.State.ENABLED)
 
             # wait for one measurement to arrive
             await self.remote.evt_dimmMeasurement.next(flush=True, timeout=MEAS_TIMEOUT)
@@ -208,9 +195,7 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
             )
 
             self.remote.evt_summaryState.flush()
-            await salobj.set_summary_state(
-                remote=self.remote, state=salobj.State.STANDBY
-            )
+            await salobj.set_summary_state(remote=self.remote, state=salobj.State.STANDBY)
             await self.assert_next_summary_state(
                 state=salobj.State.DISABLED,
                 flush=False,
@@ -227,9 +212,7 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
         """The CSC should be able to disable ameba mode at 9am today."""
         global fixed_now
 
-        fixed_now = datetime.datetime(
-            2025, 1, 1, 8, 59, 0, tzinfo=ZoneInfo("America/Santiago")
-        )
+        fixed_now = datetime.datetime(2025, 1, 1, 8, 59, 0, tzinfo=ZoneInfo("America/Santiago"))
         long_sleeps.clear()
 
         with (
@@ -263,9 +246,7 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
         """The CSC should be able to disable ameba mode at 9am tomorrow."""
         global fixed_now
 
-        fixed_now = datetime.datetime(
-            2025, 1, 1, 9, 1, 0, tzinfo=ZoneInfo("America/Santiago")
-        )
+        fixed_now = datetime.datetime(2025, 1, 1, 9, 1, 0, tzinfo=ZoneInfo("America/Santiago"))
         long_sleeps.clear()
 
         with (
@@ -299,9 +280,7 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
         """Automation mode should be turned off when the CSC disables."""
         global fixed_now
 
-        fixed_now = datetime.datetime(
-            2025, 1, 1, 9, 1, 0, tzinfo=ZoneInfo("America/Santiago")
-        )
+        fixed_now = datetime.datetime(2025, 1, 1, 9, 1, 0, tzinfo=ZoneInfo("America/Santiago"))
 
         async with self.make_csc(
             initial_state=salobj.State.ENABLED,
@@ -330,9 +309,7 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
                 remote=self.remote,
             )
 
-            set_automation_mode.assert_awaited_with(
-                dimm.controllers.base_dimm.AutomationMode.OFF
-            )
+            set_automation_mode.assert_awaited_with(dimm.controllers.base_dimm.AutomationMode.OFF)
 
     async def test_astelco_dimm_events(self):
         async with self.make_csc(
@@ -361,16 +338,9 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
                     mock_warn.call_args_list,
                     mock_error.call_args_list,
                 ):
-                    assert (
-                        call("DIMM log: SAMPLE:0 Sample info message")
-                        not in call_args_list
-                    )
+                    assert call("DIMM log: SAMPLE:0 Sample info message") not in call_args_list
 
+                assert call("DIMM log: SAMPLE:0 Sample warning message") in mock_warn.call_args_list
                 assert (
-                    call("DIMM log: SAMPLE:0 Sample warning message")
-                    in mock_warn.call_args_list
-                )
-                assert (
-                    call("DIMM log: [cmdid=12345] SAMPLE:0 Sample error message")
-                    in mock_error.call_args_list
+                    call("DIMM log: [cmdid=12345] SAMPLE:0 Sample error message") in mock_error.call_args_list
                 )
