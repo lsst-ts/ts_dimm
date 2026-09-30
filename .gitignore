@@ -25,3 +25,4 @@ tests/.tests
 *.egg-info/
 towncrier.toml
 .ruff.toml
+.LICENSE.txt

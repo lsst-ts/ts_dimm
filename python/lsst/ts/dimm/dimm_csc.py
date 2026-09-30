@@ -13,11 +13,11 @@
 #
 # This program is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 import asyncio
 import datetime
@@ -61,12 +61,6 @@ TELEMETRY_LOOP_DONE = 102
 This error code is published in `DIMM_logevent_errorCodeC` if the coroutine
 that monitors the health and status of the DIMM finishes while the CSC is in
 enable state.
-"""
-CONTROLLER_START_FAILED = 103
-"""Controller Start Failed (`int).
-
-This error code is published in `DIMM_logevent_errorCodeC` if the coroutine
-that starts the controller fails while transititng to enable state.
 """
 
 
@@ -197,12 +191,10 @@ class DIMMCSC(salobj.ConfigurableCsc):
         await self.controller.unset()
         self.controller = None
 
-    async def end_start(self, id_data):
-        """End do_start; called after state changes.
+    async def begin_start(self, id_data):
+        """Begin do_start; called before state changes.
 
-        This method will call `start` on the controller and start the telemetry
-        and seeing monitoring loops. It also starts the
-        turn_dimm_off_in_morning background task.
+        This method configures the CSC and calls `start` for the controller.
 
         Parameters
         ----------
@@ -210,21 +202,28 @@ class DIMMCSC(salobj.ConfigurableCsc):
             Command ID and data
         """
         await self.cmd_start.ack_in_progress(id_data, timeout=60)
+        await super().begin_start(id_data)
 
         try:
             await self.controller.start()
-        except Exception:
+        except Exception as e:
             self.log.exception("Failed starting the controller.")
-            await self.fault(
-                code=CONTROLLER_START_FAILED,
-                report="Controller start failed.",
-                traceback=traceback.format_exc(),
-            )
-            raise RuntimeError(
-                "Failed to start controller. Check configuration and make sure DIMM"
+            raise salobj.ExpectedError(
+                "Failed to start controller. Check configuration and make sure DIMM "
                 "controller is alive and reachable by the CSC."
-            )
+            ) from e
 
+    async def end_start(self, id_data):
+        """End do_start; called after state changes.
+
+        This method starts the telemetry and seeing monitoring loops. It
+        also starts the turn_dimm_off_in_morning background task.
+
+        Parameters
+        ----------
+        id_data : `CommandIdData`
+            Command ID and data
+        """
         self.telemetry_loop_task = asyncio.create_task(self.telemetry_loop())
         self.seeing_loop_task = asyncio.create_task(self.seeing_loop())
 
