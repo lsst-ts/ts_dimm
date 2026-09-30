@@ -1,3 +1,13 @@
+.. py:currentmodule:: lsst.ts.dimm
+
+.. _lsst.ts.dimm.version_history:
+
+###############
+Version History
+###############
+
+.. towncrier release notes start
+
 v0.10.2 (2026-09-30)
 ====================
 
