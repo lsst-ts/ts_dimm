@@ -1,0 +1,1 @@
+Avoided fault of the CSC if the controller fails to start, only causing `start` to fail.
