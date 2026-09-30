@@ -181,6 +181,26 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
             )
             assert not self.csc.controller.connected
 
+    async def test_start_fails_if_controller_start_fails(self):
+        async with self.make_csc(
+            initial_state=salobj.State.STANDBY,
+            config_dir=TEST_CONFIG_DIR,
+            simulation_mode=1,
+        ):
+            await self.assert_next_summary_state(salobj.State.STANDBY)
+
+            with patch.object(
+                dimm.controllers.AstelcoDIMM,
+                "start",
+                AsyncMock(side_effect=ConnectionRefusedError()),
+            ):
+                with salobj.assertRaisesAckError():
+                    await self.remote.cmd_start.start(timeout=SHORT_TIMEOUT)
+            assert self.csc.summary_state == salobj.State.STANDBY
+
+            await self.remote.cmd_start.start(timeout=SHORT_TIMEOUT)
+            await self.assert_next_summary_state(salobj.State.DISABLED)
+
     async def test_set_ameba_mode(self):
         async with self.make_csc(
             initial_state=salobj.State.ENABLED,
