@@ -3,7 +3,7 @@ check-xml: true
 black: false
 flake8: false
 ruff: true
-isort: true
+isort: false
 mypy: false
 towncrier: true
 insert-license: true

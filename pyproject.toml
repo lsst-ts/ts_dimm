@@ -31,8 +31,5 @@ __version__ = "{version}"
 addopts = "--ignore-glob=*/version.py"
 asyncio_mode = "auto"
 
-[tool.isort]
-profile = "black"
-
 [project.optional-dependencies]
 dev = ["documenteer[pipelines]"]
