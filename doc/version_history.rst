@@ -1,3 +1,19 @@
+v0.10.2 (2026-09-30)
+====================
+
+Bug Fixes
+---------
+
+- Avoided fault of the CSC if the controller fails to start, only causing `start` to fail. (`SSW-3002 <https://rubinobs.atlassian.net//browse/SSW-3002>`_)
+
+
+Documentation
+-------------
+
+- Added insert-license pre-commit hook. (`OSW-2878 <https://rubinobs.atlassian.net//browse/OSW-2878>`_)
+- Fixed the project name in the license headers to match the one expected by the insert-license pre-commit hook. (`SSW-3002 <https://rubinobs.atlassian.net//browse/SSW-3002>`_)
+
+
 v0.10.1 (2026-06-04)
 ====================
 
