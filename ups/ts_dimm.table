@@ -1,6 +1,8 @@
-setupRequired(sconsUtils)
 setupRequired(ts_salobj)
 setupRequired(ts_tcpip)
+setupRequired(ts_config_ocs)
+setupRequired(ts_utils)
+setupRequired(ts_xml)
 
 envPrepend(PATH, ${PRODUCT_DIR}/bin)
 

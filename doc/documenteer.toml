@@ -1,0 +1,20 @@
+[project]
+title = "DIMM"
+# Copyright information displayed on the footer of each page
+copyright = "2019-2026 Association of Universities for Research in Astronomy, Inc. (AURA)"
+
+[project.python]
+# pyproject.toml package name, fills out unseen metadata
+package = "ts-dimm"
+documentation_url_key = "documentation"
+github_url_key = "source_code"
+
+[sphinx]
+extensions = ["sphinx-jsonschema"]
+
+[sphinx.intersphinx.projects]
+ts-salobj = "https://ts-salobj.lsst.io"
+ts-tcpip = "https://ts-tcpip.lsst.io"
+ts-utils = "https://ts-utils.lsst.io"
+ts-xml = "https://ts-xml.lsst.io"
+python = "https://docs.python.org/3.13/"

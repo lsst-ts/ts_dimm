@@ -19,16 +19,9 @@
 # You should have received a copy of the GNU General Public License
 # along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-"""Sphinx configuration file for TSSW package"""
-
-from documenteer.conf.pipelinespkg import *  # type: ignore # noqa
+import lsst.ts.dimm  # noqa
+from documenteer.conf.guide import *  # noqa
 
 project = "ts_dimm"
-html_theme_options["logotext"] = project  # type: ignore # noqa
 html_title = project
 html_short_title = project
-
-intersphinx_mapping["ts_salobj"] = ("https://ts-salobj.lsst.io", None)  # type: ignore # noqa
-intersphinx_mapping["ts_tcpip"] = ("https://ts-tcpip.lsst.io", None)  # type: ignore # noqa
-intersphinx_mapping["ts_tcpip"] = ("https://ts-utils.lsst.io", None)  # type: ignore # noqa
-intersphinx_mapping["ts_xml"] = ("https://ts-xml.lsst.io", None)  # type: ignore # noqa

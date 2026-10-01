@@ -1,1 +1,1 @@
-documenteer[pipelines]
+documenteer[guide]

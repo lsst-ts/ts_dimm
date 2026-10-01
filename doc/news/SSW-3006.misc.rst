@@ -1,0 +1,1 @@
+Removed leftover flake8/isort configuration, added the standard TSSW GitHub workflows, set up the towncrier version history, removed scons support, and aligned the packaging with the developer guide.

@@ -9,7 +9,7 @@ source:
 build:
   script: {{ PYTHON }} -m pip install --no-deps --ignore-installed .
   string: "py{{ PY_VER | replace('.', '') }}{{ PKG_HASH }}_{{ PKG_BUILDNUM }}"
-  noarch: generic
+  noarch: python
   entry_points:
     - run_dimm_csc = lsst.ts.dimm.dimm_csc:run_dimm_csc
 
@@ -24,7 +24,6 @@ test:
     - bin
     - pyproject.toml
     - python
-    - setup.cfg
     - tests
   commands:
     - pytest
